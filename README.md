@@ -110,3 +110,4 @@ Ver `.env.example` para la lista completa de variables configurables.
 ## Licencia
 
 Uso interno - Grupo Riguel de Astronomia
+"# Astronomic_book" 
