@@ -1,113 +1,127 @@
-# Riguel Cuaderno de Campo Astronomico
+# Riguel Cuaderno de Campo Astronómico
 
-Aplicacion web local para el grupo Riguel de astronomia. Registra, gestiona y exporta observaciones astronomicas con metadatos completos de fotografia (sesiones de exposicion, frames de calibracion).
+Aplicación web **local** para el grupo Riguel de astronomía: registra, gestiona y exporta
+observaciones con los metadatos completos de fotografía (sesiones de exposición, frames de
+calibración).
+
+Corre entera en tu computadora con SQLite como base de datos. No necesita internet, ni Docker, ni
+servidores externos.
+
+---
+
+## Para usarla (sin tocar código)
+
+Solo necesitás **Windows con Python 3.12 o superior**: no hace falta Node.js.
+
+1. Descomprimí el paquete
+2. Doble clic en **`instalar.bat`**
+3. Doble clic en **`arrancar.bat`** → se abre el navegador en http://localhost:8000
+
+Guía completa, uso diario y solución de problemas: **[`INSTALL.md`](INSTALL.md)**
+
+---
+
+## Para desarrollar
+
+Python 3.12+, Node.js 20+ y npm 10+.
+
+```bash
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r backend/requirements.txt -r backend/requirements-dev.txt
+
+cd backend && alembic upgrade head && cd ..
+cd frontend && npm install && cd ..
+
+python run.py          # backend :8000 + Vite :5173 (usá :5173 en desarrollo)
+```
+
+Guía completa, tests, modo producción y problemas conocidos: **[`DESARROLLO.md`](DESARROLLO.md)**
+
+---
 
 ## Stack
 
-- **Backend**: Python 3.12+, FastAPI, SQLAlchemy (async), SQLite, Alembic
-- **Frontend**: React 18, TypeScript, Vite, Tailwind CSS, TanStack Query
-- **Base de datos**: SQLite (archivo local `riguel.db`)
+| | |
+|---|---|
+| **Backend** | Python 3.12+, FastAPI, SQLAlchemy 2 (async), SQLite, Alembic |
+| **Frontend** | React 18, TypeScript, Vite, Tailwind CSS, TanStack Query |
+| **PDF / CSV** | ReportLab, csv + zipfile |
+| **Base de datos** | SQLite en un archivo (`backend/riguel.db`) |
 
-## Requisitos
+---
 
-- Python 3.12+
-- Node.js 20+
-- npm 10+
+## Dos modos de ejecución
 
-## Inicio rapido
+| | Servidores | URL | Cuándo |
+|---|---|---|---|
+| **Producción** | 1 (FastAPI sirve la interfaz compilada) | http://localhost:8000 | Uso normal e instalación final |
+| **Desarrollo** | 2 (FastAPI + Vite) | http://localhost:5173 | Programando, con recarga en caliente |
 
-### Opcion 1: Orquestador (recomendado)
+En producción, `backend/app/main.py` sirve `frontend/dist` y resuelve el enrutado del cliente con un
+fallback a `index.html`, dejando intactas las rutas de `api/`, `imagenes/` y la documentación.
 
-```bash
-python run.py
-```
-
-Levanta ambos servidores:
-- Backend: http://localhost:8000
-- Frontend: http://localhost:5173
-
-### Opcion 2: Manual
-
-**Backend:**
-```bash
-cd backend
-pip install -r requirements.txt
-python run.py
-```
-
-**Frontend:**
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-## Documentacion API
-
-Una vez levantado el backend, la documentacion interactiva esta disponible en:
-- Swagger UI: http://localhost:8000/docs
-- ReDoc: http://localhost:8000/redoc
-
-## Estructura del proyecto
-
-```
-observaciones/
-├── backend/
-│   ├── app/
-│   │   ├── api/v1/         # Routers REST
-│   │   ├── core/           # Config, database, security
-│   │   ├── crud/           # Operaciones CRUD
-│   │   ├── models/         # Modelos SQLAlchemy
-│   │   ├── schemas/        # Schemas Pydantic
-│   │   └── services/       # CSV/PDF generators
-│   ├── alembic/            # Migraciones
-│   ├── tests/              # Tests pytest
-│   ├── run.py              # Entry point backend
-│   └── requirements.txt
-├── frontend/
-│   ├── src/
-│   │   ├── components/     # UI components + wizard
-│   │   ├── hooks/          # TanStack Query hooks
-│   │   ├── pages/          # Dashboard, List, Detail, Admin
-│   │   ├── services/       # API client (axios)
-│   │   ├── types/          # TypeScript interfaces
-│   │   └── utils/          # Date/format helpers
-│   ├── package.json
-│   └── vite.config.ts
-├── data/imagenes/          # Imagenes estaticas
-├── run.py                  # Orquestador root
-└── README.md
-```
+---
 
 ## Funcionalidades
 
-- **Dashboard**: Resumen de observaciones, estadisticas, observaciones recientes
-- **Observaciones**: Lista con busqueda y filtros, creacion con wizard de 3 pasos
-- **Wizard**: Datos de noche -> Sesiones de captura -> Calibraciones
-- **Detalle**: Vista completa con edicion, duplicado y exportacion
-- **Exportacion**: CSV (tabla individual o ZIP con todas), PDF (informe noche o campana)
-- **Admin filtros**: Gestion de catalogo de filtros con reordenamiento drag-drop
-- **Dark mode**: Tema oscuro/claro con persistencia en localStorage
+- **Dashboard**: resumen, estadísticas y observaciones recientes
+- **Observaciones**: lista con búsqueda y filtros; alta con asistente de 3 pasos
+  (datos de la noche → sesiones de captura → calibraciones)
+- **Detalle**: vista completa con edición, duplicado y exportación
+- **Exportación**: CSV (tabla individual o ZIP con todas) y PDF (informe de noche o de campaña)
+- **Filtros**: catálogo administrable con reordenamiento arrastrando
+- **Asociación**: nombre del grupo y logo configurables, aplicados al menú, al favicon y a los PDF
+- **Tema** claro/oscuro con persistencia
 
-## Testing
+---
 
-**Backend:**
-```bash
-cd backend
-pytest
+## Estructura
+
+```
+observaciones/
+├── instalar.bat              instalador de doble clic (usuario final)
+├── arrancar.bat              arranca la app y abre el navegador
+├── abrir-navegador.ps1       espera al servidor y abre el navegador
+├── empaquetar.ps1            genera y verifica el ZIP de distribución
+├── run.py                    orquestador de desarrollo (dos servidores)
+├── INSTALL.md                guía para quien instala
+├── DESARROLLO.md             guía para quien programa
+├── backend/
+│   ├── app/
+│   │   ├── main.py           FastAPI + servicio del frontend compilado
+│   │   ├── api/v1/           routers REST (observatorio, filtros, observaciones, export)
+│   │   ├── core/             configuración, base de datos, seguridad
+│   │   ├── crud/             operaciones de datos
+│   │   ├── models/           modelos SQLAlchemy
+│   │   ├── schemas/          esquemas Pydantic
+│   │   └── services/         generadores de PDF y CSV
+│   ├── alembic/versions/     migraciones
+│   ├── data/imagenes/        logo por defecto y fotos subidas
+│   ├── tests/                tests de pytest
+│   ├── requirements.txt      dependencias de ejecución
+│   └── requirements-dev.txt  dependencias de desarrollo
+├── frontend/
+│   ├── src/                  React + TypeScript
+│   ├── e2e/                  test de navegador real (CDP, sin dependencias)
+│   └── dist/                 compilado (generado, no versionado)
+└── openspec/                 propuestas y artefactos del flujo SDD
 ```
 
-**Frontend:**
-```bash
-cd frontend
-npm test
-```
+---
+
+## Documentación de la API
+
+Con el backend levantado:
+
+- Swagger UI: http://localhost:8000/docs
+- ReDoc: http://localhost:8000/redoc
 
 ## Variables de entorno
 
-Ver `.env.example` para la lista completa de variables configurables.
+Todas tienen valores por defecto razonables: la aplicación arranca sin configurar nada.
+Ver `.env.example` para la lista completa.
 
 ## Licencia
 
-Uso interno - Grupo Riguel de Astronomia
-"# Astronomic_book" 
+Uso interno — Grupo Riguel de Astronomía.

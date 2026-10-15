@@ -1,0 +1,8 @@
+* text=auto
+
+# Los scripts de Windows necesitan finales de linea CRLF, SIEMPRE.
+# Con finales LF, cmd.exe no resuelve bien los "goto": el .bat se saltea
+# instrucciones o termina en un lugar inesperado. Ya paso una vez.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf

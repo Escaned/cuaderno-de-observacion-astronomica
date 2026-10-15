@@ -1,210 +1,140 @@
-# Guía de instalación
+# Riguel — Cuaderno de Campo Astronómico
 
-**Objetivo:** tener *Riguel Cuaderno de Campo Astronómico* corriendo en tu máquina en unos 5 minutos.
+Aplicación para registrar y consultar las observaciones del grupo, con informes en PDF.
 
-Es una app local: backend **FastAPI** + frontend **React**, con base **SQLite** en un archivo (`backend/riguel.db`). No necesitás base de datos externa, ni Docker, ni servicios en la nube. Todo corre en tu computadora.
-
-> **Camino rápido (TL;DR):** clonar → `pip install` → `alembic upgrade head` → `npm install` → `python run.py` → abrir http://localhost:5173
-
----
-
-## 1. Requisitos previos
-
-| Herramienta | Versión mínima | Verificar con |
-|---|---|---|
-| Python | 3.12+ | `python --version` |
-| Node.js | 20+ | `node --version` |
-| npm | 10+ | `npm --version` |
-| Git | cualquiera | `git --version` |
-
-Si alguno falta, instalalo antes de seguir. En Windows, Python y Node se consiguen desde python.org y nodejs.org.
+Funciona **en tu propia computadora**: no necesita internet, ni cuenta, ni servidor externo. Tus datos
+quedan en tu disco.
 
 ---
 
-## 2. Instalación paso a paso
+## Lo que necesitás
 
-### 2.1 Clonar el repositorio
-
-```bash
-git clone <URL_DEL_REPO> observaciones
-cd observaciones
-```
-
-### 2.2 Backend
-
-Entrá a la carpeta del backend y creá un entorno virtual:
-
-```bash
-cd backend
-python -m venv .venv
-```
-
-Activalo según tu sistema:
-
-| Sistema | Comando |
+| | |
 |---|---|
-| Windows (PowerShell) | `.venv\Scripts\Activate.ps1` |
-| Windows (CMD) | `.venv\Scripts\activate.bat` |
-| Linux / macOS | `source .venv/bin/activate` |
+| **Sistema** | Windows 10 u 11 |
+| **Python** | 3.12 o superior — [descargar](https://www.python.org/downloads/windows/) |
+| **Navegador** | Chrome, Edge, Firefox o cualquier otro |
 
-Instalá las dependencias:
+Eso es todo. **No hace falta Node.js, ni Docker, ni instalar una base de datos.**
 
-```bash
-pip install -r requirements.txt
+> ⚠️ Al instalar Python, marcá la casilla **Add python.exe to PATH** en la primera pantalla del
+> instalador. Si no lo hacés, después el instalador de la aplicación no va a encontrar Python.
+
+Si preferís la línea de comandos, en Windows también sirve:
+
+```powershell
+winget install -e --id Python.Python.3.12
 ```
 
-### 2.3 Crear la base de datos
+---
 
-```bash
-alembic upgrade head
+## Instalación (2 pasos)
+
+### Paso 1 — Instalar
+
+Descomprimí el ZIP donde quieras (por ejemplo en `Documentos`) y hacé **doble clic en `instalar.bat`**.
+
+Se abre una ventana negra que va mostrando el progreso. Tarda **un par de minutos** la primera vez,
+porque descarga las dependencias. Cuando termine vas a ver:
+
+```
+============================================================
+  INSTALACION COMPLETA
+============================================================
 ```
 
-Esto crea las tablas y carga los **datos semilla**: el observatorio *Riguel* (Madrid) y los 6 filtros estándar (L, R, G, B, Ha, OIII). Ya podés registrar observaciones sin configurar nada más.
+> ⚠️ **Descomprimí el ZIP antes de usarlo.** Si hacés doble clic adentro del ZIP comprimido, o desde
+> una carpeta temporal, la instalación puede fallar.
 
-### 2.4 Frontend
+### Paso 2 — Usar
 
-```bash
-cd ../frontend
-npm install
-```
+Hacé **doble clic en `arrancar.bat`**. Se abre el navegador solo, en:
 
-### 2.5 Arrancar todo
+**http://localhost:8000**
 
-Volvé a la raíz y ejecutá el orquestador:
+Si el navegador no se abre, escribí esa dirección a mano.
 
-```bash
-cd ..
-python run.py
-```
+---
 
-Levanta los dos servidores a la vez y los baja con `Ctrl+C`.
+## Uso diario
 
-| Servicio | URL |
+| Quiero… | Cómo |
 |---|---|
-| Frontend | http://localhost:5173 |
-| Backend API | http://localhost:8000 |
-| Documentación de la API (Swagger) | http://localhost:8000/docs |
+| Abrir la aplicación | Doble clic en `arrancar.bat` |
+| Cerrarla | Cerrá la **ventana negra** (o `Ctrl+C` adentro) |
+| Cambiar el nombre o el logo del grupo | Menú lateral → **Asociación** |
+| Descargar un informe | Pantalla **Exportar** |
+| Registrarlo todo de nuevo | No hace falta: los datos quedan guardados entre sesiones |
+
+La aplicación **no se instala como servicio**: se abre cuando la arrancás y se cierra cuando cerrás
+la ventana. Nada queda corriendo de fondo.
+
+**Tu primera observación:** hacé clic en *Nueva observación* y seguí el asistente de 3 pasos
+(**datos de la noche** → **sesiones de captura** → **calibraciones**). La mayoría de los campos se
+completan solos con valores razonables.
 
 ---
 
-## 3. Arranque manual (dos terminales)
+## Dónde están tus datos (importante)
 
-Si preferís ver los logs de cada proceso por separado:
+Todo vive dentro de la carpeta de la aplicación:
 
-**Terminal 1, backend:**
-```bash
-cd backend
-python run.py
-```
+| Qué | Dónde |
+|---|---|
+| Observaciones, filtros, configuración | `backend\riguel.db` |
+| Fotos y el logo | `backend\data\imagenes\` |
 
-**Terminal 2, frontend:**
-```bash
-cd frontend
-npm run dev
-```
+**Para hacer una copia de seguridad alcanza con copiar esos dos.** Guardalos juntos y vas a poder
+restaurar todo en cualquier momento: pegalos de vuelta en su lugar y listo.
 
-> 💡 Si usás el entorno virtual, **activalo antes** de correr `python run.py` desde la raíz. El orquestador reutiliza el mismo intérprete de Python, así que si no está activado el backend arrancaría sin las dependencias.
+> El archivo `riguel.db` es la base de datos completa. Si lo borrás, la próxima vez que arranques se
+> crea una nueva y **vacía**.
 
 ---
 
-## 4. Verificar que quedó bien
+## Si algo no funciona
 
-| Check | Cómo | Resultado esperado |
-|---|---|---|
-| Backend vivo | http://localhost:8000/health | `{"status":"ok","service":"riguel-caderno-api"}` |
-| Base migrada | `cd backend` y luego `alembic current` | `0002 (head)` |
-| Datos semilla | http://localhost:8000/api/v1/filtros | 6 filtros |
-| Frontend | http://localhost:5173 | Dashboard con menú lateral |
+| Qué pasa | Qué hacer |
+|---|---|
+| **`instalar.bat` dice que no encuentra Python** | Instalá Python desde [python.org](https://www.python.org/downloads/windows/) marcando *Add python.exe to PATH*. Después cerrá la ventana y volvé a ejecutar `instalar.bat` |
+| **`instalar.bat` dice que el Python es viejo** | Necesitás 3.12 o superior. Instalá una versión nueva y volvé a empezar |
+| **La ventana negra se cierra al instante** | Ejecutá `instalar.bat` desde una terminal para leer el error: abrí *Símbolo del sistema*, entrá a la carpeta con `cd` y escribí `instalar.bat` |
+| **"Address already in use"** al arrancar | Ya hay algo usando el puerto 8000 (a veces, una aplicación anterior que quedó abierta). Cerrá la ventana negra que hayas dejado abierta y volvé a intentar |
+| **El navegador abre pero la página está en blanco** | Esperá unos segundos y recargá (`F5`). Si sigue, arrancá de nuevo con `arrancar.bat` |
+| **La instalación se corta por la mitad** | Casi siempre es internet. Volvé a ejecutar `instalar.bat`: retoma lo que ya había bajado |
+| **Quiero empezar de cero** | Borrá `backend\riguel.db` y ejecutá `instalar.bat` otra vez |
 
-Checklist:
-
-- [ ] `/health` responde `ok`
-- [ ] `alembic current` muestra `0002`
-- [ ] `/api/v1/filtros` devuelve 6 filtros
-- [ ] El frontend carga el Dashboard
-
----
-
-## 5. Variables de entorno (opcional)
-
-**La app arranca sin configurar nada**: todas las variables tienen un valor por defecto razonable.
-
-Si querés personalizar algo, copiá el archivo de ejemplo **dentro de `backend/`** (que es el directorio de trabajo del backend):
-
-```bash
-copy .env.example backend\.env     # Windows
-cp .env.example backend/.env       # Linux / macOS
-```
-
-| Variable | Default | Para qué sirve |
-|---|---|---|
-| `DATABASE_URL` | `sqlite+aiosqlite:///./riguel.db` | Ubicación de la base SQLite |
-| `API_HOST` | `0.0.0.0` | Interfaz donde escucha el backend |
-| `API_PORT` | `8000` | Puerto del backend |
-| `FRONTEND_URL` | `http://localhost:5173` | Origen permitido por CORS |
-| `TIMEZONE` | `Europe/Madrid` | Zona horaria |
-| `OBS_NOMBRE` | `Riguel` | Nombre del observatorio (semilla inicial) |
-| `OBS_LAT` / `OBS_LON` | `40.4168` / `-3.7038` | Coordenadas del observatorio |
-| `OBS_ALT` | `650.0` | Altitud en metros |
-| `OBS_TZ` | `Europe/Madrid` | Zona horaria del observatorio |
-| `IMAGES_DIR` | `./data/imagenes` | Carpeta de imágenes estáticas |
-| `IMAGES_URL_PREFIX` | `/imagenes` | Ruta pública de las imágenes |
-| `API_KEY` | (vacío) | Opcional, para exponer en LAN |
+Si nada de esto lo resuelve, pasale a quien te dio el programa **el texto completo de la ventana
+negra**. Ahí está el motivo.
 
 ---
 
-## 6. Ejecutar los tests
+## Para varios equipos de la red (opcional)
 
-**Backend** (esperado: 27 pasan, 2 se saltean):
-```bash
-cd backend
-pytest
+Por defecto la aplicación solo es accesible **desde tu propia computadora**. Para que otras personas
+de la red entren desde sus máquinas, hay que escuchar en toda la red.
+
+Editá `arrancar.bat` con el Bloc de notas y cambiá esta línea:
+
+```bat
+"..\.venv\Scripts\python.exe" -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
-**Frontend** (esperado: 22 pasan):
-```bash
-cd frontend
-npm test -- --run
+por:
+
+```bat
+"..\.venv\Scripts\python.exe" -m uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
-**End-to-end en un navegador real** (con los dos servidores corriendo y Chrome o Edge instalados):
-```bash
-cd frontend
-npm run e2e
-```
+Después los demás entran con `http://TU-IP-LOCAL:8000` (por ejemplo `http://192.168.1.50:8000`).
+Vas a tener que permitir el paso en el Firewall de Windows la primera vez.
 
-Es la única verificación que atrapa fallas de carga de módulos, que el `npm test` y el `npm run build` no pueden ver.
-Abre un navegador headless, recorre las 5 pantallas comprobando que el logo y el nombre carguen de verdad, hace el
-click-through completo de `/admin/asociacion` (guardar nombre, subir logo, quitar logo) y **restaura el estado original**
-al terminar. Opciones:
-
-- `npm run e2e -- --read-only` — no modifica ningún dato
-- `npm run e2e -- --headed` — muestra la ventana del navegador mientras trabaja
-
-No necesita dependencias: usa el Node del sistema (requiere Node 22 o superior).
+> ⚠️ Al hacer esto, la aplicación **queda sin contraseña** para cualquiera que esté en la misma red.
+> No lo hagas en una red pública o compartida.
 
 ---
 
-## 7. Problemas conocidos
+## Documentación técnica
 
-| Síntoma | Causa | Solución |
-|---|---|---|
-| `RuntimeError: Directory './data/imagenes' does not exist` | Falta la carpeta de imágenes (solo en clones anteriores al fix del `.gitkeep`) | `mkdir data\imagenes` dentro de `backend/` (en Linux/macOS: `mkdir -p data/imagenes`) |
-| `WeasyPrint could not import some external libraries` | `weasyprint` figura en `requirements.txt` pero la app **no lo usa**; en Windows necesita librerías GTK del sistema | Ignoralo, no afecta a la app. Para sacarlo del medio: `pip uninstall weasyprint` |
-| `alembic: command not found` | El entorno virtual no está activado | Activá el venv (paso 2.2) |
-| El frontend no trae datos | El backend está apagado o el puerto 8000 está ocupado | Verificá http://localhost:8000/health |
-| `Address already in use` al arrancar | Ya hay algo en el puerto 8000 o 5173 | Cerrá el proceso previo o cambiá `API_PORT` en `.env` |
-| El frontend queda en **pantalla en blanco** y la consola del navegador dice `does not provide an export named ...` | El servidor de Vite quedó sirviendo una versión vieja de un módulo (file-watching poco fiable en Windows). La terminal de Vite se ve limpia y `npm run build` pasa igual | Reiniciá `npm run dev`: matá el árbol de procesos de npm/vite y levantalo de nuevo. Recargar el navegador **no** alcanza |
-| Cambiaste código del backend y **no se refleja**: `/health` responde, pero un endpoint nuevo da 404 | `uvicorn --reload` dejó un worker huérfano sirviendo código viejo | Matá **todos** los procesos `python run.py` y sus hijos (`multiprocessing-fork`), y arrancá de nuevo |
-
-> Los dos últimos síntomas son la misma clase de problema (file-watching poco fiable en Windows) en cada mitad del
-> stack. Si algo "no se actualiza" y el código en disco está bien, **reiniciá el servidor** antes de dudar del código.
-> `npm run e2e` (sección 6) detecta el caso del frontend automáticamente.
-
----
-
-## 8. Siguiente paso
-
-Abrí http://localhost:5173/observaciones/new y creá tu primera observación.
-
-El asistente tiene 3 pasos: **datos de la noche** → **sesiones de captura** → **calibraciones**. El campo **FWHM (arcsec)** acepta valores entre **0.5 y 10.0**.
+Si necesitás modificar el código, compilar el frontend o correr los tests, mirá
+[`DESARROLLO.md`](DESARROLLO.md).

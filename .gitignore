@@ -58,3 +58,6 @@ backend/alembic/versions/*.pyc
 # OpenSpec
 .openspec/
 .atl/
+
+# Paquete de distribucion generado por empaquetar.ps1
+*.zip
