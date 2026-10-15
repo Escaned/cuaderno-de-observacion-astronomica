@@ -5,6 +5,7 @@ import { ObservationsList } from './pages/ObservationsList';
 import { NewObservation } from './pages/NewObservation';
 import { ObservationDetail } from './pages/ObservationDetail';
 import { AdminFiltros } from './pages/AdminFiltros';
+import { AdminAsociacion } from './pages/AdminAsociacion';
 
 export default function App() {
   return (
@@ -16,6 +17,7 @@ export default function App() {
         <Route path="/observaciones/:id" element={<ObservationDetail />} />
         <Route path="/observaciones/:id/edit" element={<NewObservation />} />
         <Route path="/admin/filtros" element={<AdminFiltros />} />
+        <Route path="/admin/asociacion" element={<AdminAsociacion />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

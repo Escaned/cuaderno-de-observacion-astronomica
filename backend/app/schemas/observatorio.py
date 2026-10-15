@@ -8,6 +8,7 @@ class ObservatorioBase(BaseModel):
     longitud: float
     altitud_msnm: Optional[float] = None
     zona_horaria: str = "Europe/Madrid"
+    logo_path: Optional[str] = None
 
 
 class ObservatorioCreate(ObservatorioBase):
@@ -20,6 +21,7 @@ class ObservatorioUpdate(BaseModel):
     longitud: Optional[float] = None
     altitud_msnm: Optional[float] = None
     zona_horaria: Optional[str] = None
+    logo_path: Optional[str] = None
 
 
 class ObservatorioRead(ObservatorioBase):

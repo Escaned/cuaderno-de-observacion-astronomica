@@ -13,6 +13,7 @@ class Observatorio(Base):
     longitud = Column(Float, nullable=False)
     altitud_msnm = Column(Float, nullable=True)
     zona_horaria = Column(String(50), nullable=False, default="Europe/Madrid")
+    logo_path = Column(String(255), nullable=True)
 
     __table_args__ = (
         CheckConstraint("id = 1", name="ck_observatorio_singleton"),

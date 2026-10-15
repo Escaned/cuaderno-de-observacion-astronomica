@@ -7,6 +7,7 @@ export interface Observatorio {
   longitud: number;
   altitud_msnm: number | null;
   zona_horaria: string;
+  logo_path: string | null;
 }
 
 export interface Filtro {

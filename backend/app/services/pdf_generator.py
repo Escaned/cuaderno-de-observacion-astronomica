@@ -9,6 +9,56 @@ from sqlalchemy.orm import selectinload
 from app.models import Observacion, SesionCaptura, Calibracion, Filtro, Observatorio
 
 
+def _logo_flowable(logo_path: Optional[str], max_height_cm: float = 1.6):
+    """Build a ReportLab Image flowable for the association logo.
+
+    Returns None when there is no logo configured or the file is missing, so the
+    PDF keeps working without it. The aspect ratio is preserved.
+    """
+    if not logo_path:
+        return None
+
+    from pathlib import Path
+
+    from reportlab.lib.units import cm
+    from reportlab.lib.utils import ImageReader
+    from reportlab.platypus import Image
+
+    from app.core.config import settings
+
+    path = Path(settings.images_dir) / Path(logo_path).name
+    if not path.is_file():
+        return None
+
+    try:
+        width_px, height_px = ImageReader(str(path)).getSize()
+    except Exception:
+        return None
+
+    if not width_px or not height_px:
+        return None
+
+    height = max_height_cm * cm
+    return Image(str(path), width=height * (width_px / height_px), height=height)
+
+
+def _header_table(logo, title_flowables):
+    """Logo on the left, title block on the right. Works when there is no logo."""
+    from reportlab.lib.units import cm
+    from reportlab.platypus import Table, TableStyle
+
+    header = Table([[logo or "", title_flowables]], colWidths=[2.6 * cm, 14.4 * cm])
+    header.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("ALIGN", (0, 0), (0, 0), "CENTER"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+        ("TOPPADDING", (0, 0), (-1, -1), 0),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+    ]))
+    return header
+
+
 async def generate_night_pdf(db: AsyncSession, fecha: datetime) -> bytes:
     """Generate a PDF report for a single night (all observations on that date)."""
     start_of_day = fecha.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -76,8 +126,13 @@ def _generate_night_pdf_reportlab(observaciones, observatorio, fecha) -> bytes:
     obs_name = observatorio.nombre if observatorio else "Observatorio"
     obs_location = f"{observatorio.latitud:.4f}, {observatorio.longitud:.4f}" if observatorio else ""
 
-    elements.append(Paragraph(f"<b>Informe de Noche - {obs_name}</b>", styles["Title"]))
-    elements.append(Paragraph(f"Fecha: {fecha.strftime('%d/%m/%Y')} | Ubicacion: {obs_location}", styles["Normal"]))
+    elements.append(_header_table(
+        _logo_flowable(observatorio.logo_path if observatorio else None),
+        [
+            Paragraph(f"<b>Informe de Noche - {obs_name}</b>", styles["Title"]),
+            Paragraph(f"Fecha: {fecha.strftime('%d/%m/%Y')} | Ubicacion: {obs_location}", styles["Normal"]),
+        ],
+    ))
     elements.append(Spacer(1, 0.5*cm))
 
     total_sesiones = sum(len(obs.sesiones_captura) for obs in observaciones)
@@ -128,8 +183,13 @@ def _generate_campaign_pdf_reportlab(observaciones, observatorio, fecha_desde, f
 
     obs_name = observatorio.nombre if observatorio else "Observatorio"
 
-    elements.append(Paragraph(f"<b>Informe de Campana - {obs_name}</b>", styles["Title"]))
-    elements.append(Paragraph(f"Periodo: {fecha_desde.strftime('%d/%m/%Y')} - {fecha_hasta.strftime('%d/%m/%Y')}", styles["Normal"]))
+    elements.append(_header_table(
+        _logo_flowable(observatorio.logo_path if observatorio else None),
+        [
+            Paragraph(f"<b>Informe de Campana - {obs_name}</b>", styles["Title"]),
+            Paragraph(f"Periodo: {fecha_desde.strftime('%d/%m/%Y')} - {fecha_hasta.strftime('%d/%m/%Y')}", styles["Normal"]),
+        ],
+    ))
     elements.append(Spacer(1, 0.5*cm))
 
     objetos = {}

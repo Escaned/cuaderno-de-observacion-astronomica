@@ -16,6 +16,17 @@ const api = axios.create({
 export const getObservatorio = () => api.get<Observatorio>('/observatorio').then(r => r.data);
 export const updateObservatorio = (data: Partial<Observatorio>) =>
   api.put<Observatorio>('/observatorio', data).then(r => r.data);
+export const uploadLogo = (file: File) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  return api
+    .post<Observatorio>('/observatorio/logo', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+    .then(r => r.data);
+};
+export const deleteLogo = () =>
+  api.delete<Observatorio>('/observatorio/logo').then(r => r.data);
 
 // Filtros
 export const getFiltros = (activoOnly = false) =>

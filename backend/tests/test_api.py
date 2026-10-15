@@ -170,6 +170,109 @@ async def test_observatorio_update(client):
     assert resp.json()["altitud_msnm"] == 700.0
 
 
+# Minimal valid 1x1 PNG
+_PNG_1X1 = base64.b64decode(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
+)
+
+
+@pytest.mark.asyncio
+async def test_observatorio_logo_upload(client, tmp_path, monkeypatch):
+    """Test uploading a valid PNG logo stores the file and updates logo_path."""
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "images_dir", str(tmp_path))
+
+    resp = await client.post(
+        "/api/v1/observatorio/logo",
+        files={"file": ("logo.png", _PNG_1X1, "image/png")},
+    )
+    assert resp.status_code == 200
+    logo_path = resp.json()["logo_path"]
+    assert logo_path.startswith("logo_")
+    assert logo_path.endswith(".png")
+    assert (tmp_path / logo_path).is_file()
+
+
+@pytest.mark.asyncio
+async def test_observatorio_logo_rejects_non_image(client, tmp_path, monkeypatch):
+    """Test that a file with a valid extension but non-image bytes is rejected."""
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "images_dir", str(tmp_path))
+
+    resp = await client.post(
+        "/api/v1/observatorio/logo",
+        files={"file": ("logo.png", b"this is definitely not a png", "image/png")},
+    )
+    assert resp.status_code == 400
+    assert not list(tmp_path.glob("logo_*"))
+
+
+@pytest.mark.asyncio
+async def test_observatorio_logo_rejects_bad_extension(client, tmp_path, monkeypatch):
+    """Test that unsupported extensions (e.g. gif) are rejected."""
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "images_dir", str(tmp_path))
+
+    resp = await client.post(
+        "/api/v1/observatorio/logo",
+        files={"file": ("logo.gif", b"GIF89a" + b"\x00" * 16, "image/gif")},
+    )
+    assert resp.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_observatorio_logo_delete(client, tmp_path, monkeypatch):
+    """Test deleting the logo clears logo_path and removes the uploaded file."""
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "images_dir", str(tmp_path))
+
+    up = await client.post(
+        "/api/v1/observatorio/logo",
+        files={"file": ("logo.png", _PNG_1X1, "image/png")},
+    )
+    assert up.status_code == 200
+    uploaded = tmp_path / up.json()["logo_path"]
+    assert uploaded.is_file()
+
+    resp = await client.delete("/api/v1/observatorio/logo")
+    assert resp.status_code == 200
+    assert resp.json()["logo_path"] is None
+    assert not uploaded.exists()
+
+
+@pytest.mark.asyncio
+async def test_night_pdf_embeds_logo(client, tmp_path, monkeypatch):
+    """Test the night PDF embeds the configured logo as an image XObject."""
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "images_dir", str(tmp_path))
+
+    up = await client.post(
+        "/api/v1/observatorio/logo",
+        files={"file": ("logo.png", _PNG_1X1, "image/png")},
+    )
+    assert up.status_code == 200
+
+    await client.post(
+        "/api/v1/observaciones",
+        json={
+            "objeto": "M13",
+            "fecha_hora_utc": "2026-08-20T22:00:00Z",
+            "fwhm": 2.0,
+            "sesiones_captura": [],
+        },
+    )
+
+    resp = await client.get("/api/v1/export/pdf/noche?fecha=2026-08-20T22:00:00Z")
+    assert resp.status_code == 200
+    assert resp.content.startswith(b"%PDF")
+    assert b"/Subtype /Image" in resp.content
+
+
 @pytest.mark.asyncio
 async def test_filtros_crud(client):
     """Test full CRUD for filtros."""

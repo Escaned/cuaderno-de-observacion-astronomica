@@ -49,5 +49,6 @@ async def get_or_create_observatorio(db: AsyncSession) -> Observatorio:
             longitud=settings.obs_lon,
             altitud_msnm=settings.obs_alt,
             zona_horaria=settings.obs_tz,
+            logo_path="logo.jpg",
         ),
     )
