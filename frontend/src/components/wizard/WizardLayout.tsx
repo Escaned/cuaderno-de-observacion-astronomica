@@ -22,7 +22,7 @@ export function WizardLayout({ initialData, filtros, onSubmit, onCancel, isSubmi
     objeto: initialData?.objeto ?? '',
     fecha_hora_utc: initialData?.fecha_hora_utc ?? '',
     filtro_id: initialData?.filtro_id ?? '',
-    seeing: initialData?.seeing ?? 3,
+    fwhm: initialData?.fwhm ?? '',
     temperatura: initialData?.temperatura ?? null,
     humedad: initialData?.humedad ?? null,
     viento_kph: initialData?.viento_kph ?? null,
@@ -63,8 +63,8 @@ export function WizardLayout({ initialData, filtros, onSubmit, onCancel, isSubmi
     if (s === 0) {
       if (!String(formData.objeto || '').trim()) newErrors.objeto = 'El objeto es obligatorio';
       if (!formData.fecha_hora_utc) newErrors.fecha_hora_utc = 'La fecha es obligatoria';
-      if (!formData.seeing || (formData.seeing as number) < 1 || (formData.seeing as number) > 5) {
-        newErrors.seeing = 'Seeing debe ser 1-5';
+      if (!formData.fwhm || (formData.fwhm as number) < 0.5 || (formData.fwhm as number) > 10.0) {
+        newErrors.fwhm = 'FWHM debe ser 0.5-10.0 arcsec';
       }
     }
     if (s === 1) {
@@ -92,7 +92,7 @@ export function WizardLayout({ initialData, filtros, onSubmit, onCancel, isSubmi
       objeto: formData.objeto as string,
       fecha_hora_utc: formData.fecha_hora_utc as string,
       filtro_id: (formData.filtro_id as number) || null,
-      seeing: formData.seeing as number,
+      fwhm: formData.fwhm as number,
       temperatura: (formData.temperatura as number) ?? null,
       humedad: (formData.humedad as number) ?? null,
       viento_kph: (formData.viento_kph as number) ?? null,
@@ -135,7 +135,7 @@ export function WizardLayout({ initialData, filtros, onSubmit, onCancel, isSubmi
             objeto={String(formData.objeto || '')}
             fecha_hora_utc={String(formData.fecha_hora_utc || '')}
             filtro_id={(formData.filtro_id as number) || ''}
-            seeing={Number(formData.seeing) || 3}
+            fwhm={formData.fwhm === '' ? '' : Number(formData.fwhm)}
             temperatura={formData.temperatura?.toString() ?? ''}
             humedad={formData.humedad?.toString() ?? ''}
             viento_kph={formData.viento_kph?.toString() ?? ''}

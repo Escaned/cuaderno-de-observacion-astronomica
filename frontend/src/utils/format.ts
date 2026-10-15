@@ -1,16 +1,5 @@
-export function formatSeeing(seeing: number): string {
-  const labels: Record<number, string> = {
-    1: 'I — Malo',
-    2: 'II — Regular',
-    3: 'III — Bueno',
-    4: 'IV — Muy bueno',
-    5: 'V — Excelente',
-  };
-  return labels[seeing] || String(seeing);
-}
-
-export function seeingStars(seeing: number): string {
-  return '★'.repeat(seeing) + '☆'.repeat(5 - seeing);
+export function formatFwhm(fwhm: number): string {
+  return `${fwhm.toFixed(1)}"`;
 }
 
 export function formatDuration(totalSeconds: number): string {

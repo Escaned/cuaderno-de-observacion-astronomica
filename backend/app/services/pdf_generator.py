@@ -103,7 +103,7 @@ def _generate_night_pdf_reportlab(observaciones, observatorio, fecha) -> bytes:
     elements.append(Paragraph("<b>Detalle</b>", styles["Heading2"]))
     for obs in observaciones:
         filtro_nombre = obs.filtro.nombre if obs.filtro else "-"
-        elements.append(Paragraph(f"<b>{obs.objeto}</b> - {obs.fecha_hora_utc.strftime('%H:%M')} UTC | Seeing: {obs.seeing}/5 | Filtro: {filtro_nombre}", styles["Normal"]))
+        elements.append(Paragraph(f"<b>{obs.objeto}</b> - {obs.fecha_hora_utc.strftime('%H:%M')} UTC | FWHM: {obs.fwhm:.1f}\" | Filtro: {filtro_nombre}", styles["Normal"]))
 
         for sesion in obs.sesiones_captura:
             sesion_filtro = sesion.filtro.nombre if sesion.filtro else "-"
@@ -157,12 +157,13 @@ def _generate_campaign_pdf_reportlab(observaciones, observatorio, fecha_desde, f
     elements.append(Spacer(1, 0.5*cm))
 
     elements.append(Paragraph("<b>Por Objeto</b>", styles["Heading2"]))
-    obj_data = [["Objeto", "Noches", "Tiempo exposicion"]]
+    obj_data = [["Objeto", "Noches", "Tiempo exposicion", "FWHM medio"]]
     for obj_name, obs_list in objetos.items():
         total_obj = sum(sesion.total_tiempo_seg for obs in obs_list for sesion in obs.sesiones_captura)
-        obj_data.append([obj_name, str(len(obs_list)), f"{total_obj/3600:.2f}h"])
+        fwhm_medio = sum(obs.fwhm for obs in obs_list) / len(obs_list)
+        obj_data.append([obj_name, str(len(obs_list)), f"{total_obj/3600:.2f}h", f"{fwhm_medio:.1f}\""])
 
-    obj_table = Table(obj_data, colWidths=[5*cm, 3*cm, 4*cm])
+    obj_table = Table(obj_data, colWidths=[4.5*cm, 2.5*cm, 3.5*cm, 3.5*cm])
     obj_table.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1a1a2e")),
         ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),

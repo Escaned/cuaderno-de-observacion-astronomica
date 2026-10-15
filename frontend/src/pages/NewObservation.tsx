@@ -24,7 +24,7 @@ export function NewObservation() {
         objeto: observacion.objeto,
         fechaHoraUtc: observacion.fecha_hora_utc,
         filtroId: observacion.filtro_id ?? '',
-        seeing: observacion.seeing,
+        fwhm: observacion.fwhm,
         temperatura: observacion.temperatura,
         humedad: observacion.humedad,
         vientoKph: observacion.viento_kph,

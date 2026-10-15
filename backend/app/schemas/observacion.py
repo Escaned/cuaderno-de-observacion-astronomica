@@ -65,7 +65,7 @@ class ObservacionBase(BaseModel):
     objeto: str
     fecha_hora_utc: datetime
     filtro_id: Optional[int] = None
-    seeing: int = Field(ge=1, le=5)
+    fwhm: float = Field(ge=0.5, le=10.0)
     temperatura: Optional[float] = None
     humedad: Optional[int] = Field(default=None, ge=0, le=100)
     viento_kph: Optional[float] = None
@@ -82,7 +82,7 @@ class ObservacionUpdate(BaseModel):
     objeto: Optional[str] = None
     fecha_hora_utc: Optional[datetime] = None
     filtro_id: Optional[int] = None
-    seeing: Optional[int] = Field(default=None, ge=1, le=5)
+    fwhm: Optional[float] = Field(default=None, ge=0.5, le=10.0)
     temperatura: Optional[float] = None
     humedad: Optional[int] = Field(default=None, ge=0, le=100)
     viento_kph: Optional[float] = None
@@ -106,7 +106,7 @@ class ObservacionListItem(BaseModel):
     objeto: str
     fecha_hora_utc: datetime
     filtro_id: Optional[int] = None
-    seeing: int
+    fwhm: float
     creado_en: datetime
 
     model_config = ConfigDict(from_attributes=True)

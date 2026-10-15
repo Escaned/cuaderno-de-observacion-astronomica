@@ -1,21 +1,15 @@
 import { describe, it, expect } from 'vitest';
-import { formatSeeing, seeingStars, formatDuration, formatNumber, formatTemperature } from './format';
+import { formatFwhm, formatDuration, formatNumber, formatTemperature } from './format';
 
-describe('formatSeeing', () => {
-  it('returns correct label for seeing 1', () => {
-    expect(formatSeeing(1)).toBe('I — Malo');
+describe('formatFwhm', () => {
+  it('formats FWHM with 1 decimal and arcsec symbol', () => {
+    expect(formatFwhm(2.5)).toBe('2.5"');
   });
-  it('returns correct label for seeing 5', () => {
-    expect(formatSeeing(5)).toBe('V — Excelente');
+  it('formats FWHM 1.0', () => {
+    expect(formatFwhm(1.0)).toBe('1.0"');
   });
-});
-
-describe('seeingStars', () => {
-  it('returns 5 stars for seeing 3', () => {
-    expect(seeingStars(3)).toBe('★★★☆☆');
-  });
-  it('returns all filled stars for seeing 5', () => {
-    expect(seeingStars(5)).toBe('★★★★★');
+  it('formats FWHM 3.2', () => {
+    expect(formatFwhm(3.2)).toBe('3.2"');
   });
 });
 

@@ -9,15 +9,15 @@ export function formatUTCtoMadrid(dateStr: string): string {
 }
 
 export function formatDate(dateStr: string): string {
-  return format(parseISO(dateStr), 'dd/MM/yyyy', { locale: es });
+  return formatInTimeZone(parseISO(dateStr), MADRID_TZ, 'dd/MM/yyyy', { locale: es });
 }
 
 export function formatTime(dateStr: string): string {
-  return format(parseISO(dateStr), 'HH:mm');
+  return formatInTimeZone(parseISO(dateStr), MADRID_TZ, 'HH:mm');
 }
 
 export function formatDateTime(dateStr: string): string {
-  return format(parseISO(dateStr), 'dd/MM/yyyy HH:mm', { locale: es });
+  return formatInTimeZone(parseISO(dateStr), MADRID_TZ, 'dd/MM/yyyy HH:mm', { locale: es });
 }
 
 export function toISODate(date: Date): string {

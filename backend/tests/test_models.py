@@ -40,11 +40,11 @@ async def test_filtro_unique_nombre(db_session):
 
 
 @pytest.mark.asyncio
-async def test_observacion_with_seeing_constraint(db_session):
+async def test_observacion_with_fwhm_constraint(db_session):
     obs = Observacion(
         objeto="M42",
         fecha_hora_utc=datetime.now(timezone.utc),
-        seeing=3,
+        fwhm=2.5,
         temperatura=15.0,
     )
     db_session.add(obs)
@@ -52,15 +52,15 @@ async def test_observacion_with_seeing_constraint(db_session):
 
     result = await db_session.execute(select(Observacion).where(Observacion.objeto == "M42"))
     saved = result.scalar_one()
-    assert saved.seeing == 3
+    assert saved.fwhm == 2.5
 
 
 @pytest.mark.asyncio
-async def test_observacion_seeing_out_of_range_fails(db_session):
+async def test_observacion_fwhm_out_of_range_fails(db_session):
     obs = Observacion(
         objeto="M42",
         fecha_hora_utc=datetime.now(timezone.utc),
-        seeing=10,  # Invalid: must be 1-5
+        fwhm=15.0,  # Invalid: must be 0.5-10.0
     )
     db_session.add(obs)
     with pytest.raises(Exception):
@@ -73,7 +73,7 @@ async def test_sesion_captura_relationship(db_session):
     db_session.add(filtro)
     await db_session.flush()
 
-    obs = Observacion(objeto="M42", fecha_hora_utc=datetime.now(timezone.utc), seeing=3)
+    obs = Observacion(objeto="M42", fecha_hora_utc=datetime.now(timezone.utc), fwhm=2.5)
     db_session.add(obs)
     await db_session.flush()
 
@@ -83,7 +83,6 @@ async def test_sesion_captura_relationship(db_session):
         tiempo_exposicion_seg=300.0,
         num_subs=20,
         binning=1,
-        gain=100,
         temp_sensor=-10.0,
     )
     db_session.add(sesion)
@@ -101,7 +100,7 @@ async def test_calibracion_types(db_session):
     db_session.add(filtro)
     await db_session.flush()
 
-    obs = Observacion(objeto="M42", fecha_hora_utc=datetime.now(timezone.utc), seeing=3)
+    obs = Observacion(objeto="M42", fecha_hora_utc=datetime.now(timezone.utc), fwhm=2.5)
     db_session.add(obs)
     await db_session.flush()
 
@@ -133,7 +132,7 @@ async def test_cascade_delete_observacion_removes_sesiones(db_session):
     db_session.add(filtro)
     await db_session.flush()
 
-    obs = Observacion(objeto="M42", fecha_hora_utc=datetime.now(timezone.utc), seeing=3)
+    obs = Observacion(objeto="M42", fecha_hora_utc=datetime.now(timezone.utc), fwhm=2.5)
     db_session.add(obs)
     await db_session.flush()
 
@@ -154,7 +153,7 @@ async def test_cascade_delete_sesion_removes_calibracion(db_session):
     db_session.add(filtro)
     await db_session.flush()
 
-    obs = Observacion(objeto="M42", fecha_hora_utc=datetime.now(timezone.utc), seeing=3)
+    obs = Observacion(objeto="M42", fecha_hora_utc=datetime.now(timezone.utc), fwhm=2.5)
     db_session.add(obs)
     await db_session.flush()
 

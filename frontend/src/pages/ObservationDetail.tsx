@@ -2,7 +2,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useObservacion, useDeleteObservacion } from '../hooks/useObservations';
 import { useExportPDFNoche, useExportCSV } from '../hooks/useExport';
 import { formatUTCtoMadrid } from '../utils/date';
-import { seeingStars, formatDuration, formatTemperature } from '../utils/format';
+import { formatFwhm, formatDuration, formatTemperature } from '../utils/format';
 import { Button } from '../components/ui/Button';
 import { Loader } from '../components/ui/Loader';
 
@@ -51,8 +51,8 @@ export function ObservationDetail() {
         <h2 className="text-lg font-semibold mb-4">Datos Generales</h2>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
           <div>
-            <span className="text-gray-500 dark:text-gray-400">Seeing</span>
-            <p>{seeingStars(obs.seeing)}</p>
+            <span className="text-gray-500 dark:text-gray-400">FWHM</span>
+            <p>{formatFwhm(obs.fwhm)}</p>
           </div>
           <div>
             <span className="text-gray-500 dark:text-gray-400">Temperatura</span>

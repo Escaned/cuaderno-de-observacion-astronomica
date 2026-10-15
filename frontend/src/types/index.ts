@@ -45,7 +45,7 @@ export interface Observacion {
   objeto: string;
   fecha_hora_utc: string;
   filtro_id: number | null;
-  seeing: number;
+  fwhm: number;
   temperatura: number | null;
   humedad: number | null;
   viento_kph: number | null;
@@ -62,7 +62,7 @@ export interface ObservacionListItem {
   objeto: string;
   fecha_hora_utc: string;
   filtro_id: number | null;
-  seeing: number;
+  fwhm: number;
   creado_en: string;
 }
 
@@ -70,7 +70,7 @@ export interface ObservacionCreate {
   objeto: string;
   fecha_hora_utc: string;
   filtro_id?: number | null;
-  seeing: number;
+  fwhm: number;
   temperatura?: number | null;
   humedad?: number | null;
   viento_kph?: number | null;

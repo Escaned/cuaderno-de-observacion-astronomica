@@ -1,4 +1,5 @@
 import pytest
+import pytest_asyncio
 import tempfile
 import os
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
@@ -9,7 +10,7 @@ from app.core.database import Base
 from app.models import Observatorio, Filtro, Observacion, SesionCaptura, Calibracion
 
 
-@pytest.fixture(scope="function")
+@pytest_asyncio.fixture(scope="function")
 async def db_session():
     # Use temporary file for SQLite to avoid connection sharing issues
     with tempfile.NamedTemporaryFile(suffix='.db', delete=False) as tmp:
@@ -26,14 +27,6 @@ async def db_session():
         # Create tables
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
-        
-        # Verify tables
-        async with engine.begin() as conn:
-            def check_tables(sync_conn):
-                inspector = inspect(sync_conn)
-                return inspector.get_table_names()
-            tables = await conn.run_sync(check_tables)
-            print(f"Tables after create_all: {tables}")
         
         async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
         async with async_session() as session:

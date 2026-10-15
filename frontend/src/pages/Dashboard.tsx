@@ -1,7 +1,7 @@
 import { useObservations, useObservacionesStats } from '../hooks/useObservations';
 import { useObservatorio } from '../hooks/useObservatorio';
 import { formatUTCtoMadrid } from '../utils/date';
-import { seeingStars, formatDuration } from '../utils/format';
+import { formatFwhm, formatDuration } from '../utils/format';
 import { Loader } from '../components/ui/Loader';
 
 export function Dashboard() {
@@ -51,7 +51,7 @@ export function Dashboard() {
                     {formatUTCtoMadrid(obs.fecha_hora_utc)}
                   </span>
                 </div>
-                <span className="text-sm">{seeingStars(obs.seeing)}</span>
+                <span className="text-sm">{formatFwhm(obs.fwhm)}</span>
               </div>
             ))}
           </div>

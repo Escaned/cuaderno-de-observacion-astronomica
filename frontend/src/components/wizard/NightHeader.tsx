@@ -6,7 +6,7 @@ interface NightHeaderProps {
   objeto: string;
   fecha_hora_utc: string;
   filtro_id: number | '';
-  seeing: number;
+  fwhm: number | '';
   temperatura: string;
   humedad: string;
   viento_kph: string;
@@ -21,7 +21,7 @@ export function NightHeader({
   objeto,
   fecha_hora_utc,
   filtro_id,
-  seeing,
+  fwhm,
   temperatura,
   humedad,
   viento_kph,
@@ -62,17 +62,15 @@ export function NightHeader({
             ...filtros.map(f => ({ value: f.id, label: f.nombre })),
           ]}
         />
-        <Select
-          label="Seeing *"
-          value={seeing}
-          onChange={e => onChange('seeing', Number(e.target.value))}
-          options={[
-            { value: 1, label: 'I — Malo' },
-            { value: 2, label: 'II — Regular' },
-            { value: 3, label: 'III — Bueno' },
-            { value: 4, label: 'IV — Muy bueno' },
-            { value: 5, label: 'V — Excelente' },
-          ]}
+        <Input
+          label="FWHM (arcsec) *"
+          type="number"
+          step="0.1"
+          min="0.5"
+          max="10.0"
+          value={fwhm}
+          onChange={e => onChange('fwhm', e.target.value ? parseFloat(e.target.value) : '')}
+          placeholder="Ej: 2.5"
         />
         <Input
           label="Temperatura (°C)"

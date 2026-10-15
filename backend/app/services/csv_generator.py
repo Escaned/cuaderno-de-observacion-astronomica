@@ -68,7 +68,7 @@ async def _write_observaciones(writer, db, fecha_desde, fecha_hasta, filtro_id):
     writer.writerow(["=== OBSERVACIONES ==="])
     writer.writerow([
         "id", "objeto", "fecha_hora_utc", "filtro_id", "filtro_nombre",
-        "seeing", "temperatura", "humedad", "viento_kph", "direccion_viento",
+        "fwhm_arcsec", "temperatura", "humedad", "viento_kph", "direccion_viento",
         "descripcion", "imagenes", "creado_en", "actualizado_en"
     ])
     query = select(Observacion).options(selectinload(Observacion.filtro)).order_by(Observacion.fecha_hora_utc.desc())
@@ -82,7 +82,7 @@ async def _write_observaciones(writer, db, fecha_desde, fecha_hasta, filtro_id):
     for obs in result.scalars().all():
         writer.writerow([
             obs.id, obs.objeto, obs.fecha_hora_utc.isoformat(), obs.filtro_id,
-            obs.filtro.nombre if obs.filtro else None, obs.seeing, obs.temperatura,
+            obs.filtro.nombre if obs.filtro else None, obs.fwhm, obs.temperatura,
             obs.humedad, obs.viento_kph, obs.direccion_viento, obs.descripcion,
             obs.imagenes, obs.creado_en.isoformat(), obs.actualizado_en.isoformat()
         ])

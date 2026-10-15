@@ -4,7 +4,7 @@ import { useObservations } from '../hooks/useObservations';
 import { useFilters } from '../hooks/useFilters';
 import { useDeleteObservacion } from '../hooks/useObservations';
 import { formatUTCtoMadrid } from '../utils/date';
-import { seeingStars } from '../utils/format';
+import { formatFwhm } from '../utils/format';
 import { Loader } from '../components/ui/Loader';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
@@ -58,7 +58,7 @@ export function ObservationsList() {
               <tr className="border-b border-gray-200 dark:border-gray-700">
                 <th className="text-left py-3 px-4">Objeto</th>
                 <th className="text-left py-3 px-4">Fecha (Madrid)</th>
-                <th className="text-left py-3 px-4">Seeing</th>
+                <th className="text-left py-3 px-4">FWHM</th>
                 <th className="text-left py-3 px-4">Filtro</th>
                 <th className="py-3 px-4"></th>
               </tr>
@@ -74,7 +74,7 @@ export function ObservationsList() {
                   <td className="py-3 px-4 text-gray-600 dark:text-gray-400">
                     {formatUTCtoMadrid(obs.fecha_hora_utc)}
                   </td>
-                  <td className="py-3 px-4">{seeingStars(obs.seeing)}</td>
+                  <td className="py-3 px-4">{formatFwhm(obs.fwhm)}</td>
                   <td className="py-3 px-4 text-gray-600 dark:text-gray-400">
                     {filtros?.find(f => f.id === obs.filtro_id)?.nombre ?? '—'}
                   </td>

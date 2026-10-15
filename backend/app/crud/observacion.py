@@ -142,7 +142,7 @@ async def duplicate_observacion(db: AsyncSession, observacion_id: int) -> Observ
         objeto=original.objeto,
         fecha_hora_utc=original.fecha_hora_utc,
         filtro_id=original.filtro_id,
-        seeing=original.seeing,
+        fwhm=original.fwhm,
         temperatura=original.temperatura,
         humedad=original.humedad,
         viento_kph=original.viento_kph,

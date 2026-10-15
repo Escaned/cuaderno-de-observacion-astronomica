@@ -1,15 +1,152 @@
 import pytest
+import pytest_asyncio
 from httpx import AsyncClient, ASGITransport
 from datetime import datetime, timezone
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
+from sqlalchemy.pool import NullPool
+import base64
+import re
+import tempfile
+import zlib
+import os
 
 from app.main import app
+from app.core.database import Base, get_session
+from app.models import Observatorio, Filtro, Observacion, SesionCaptura, Calibracion
 
 
-@pytest.fixture
+# Test database URL - file-based SQLite for shared access across connections
+_test_db_fd, _test_db_path = tempfile.mkstemp(suffix='.db', prefix='test_')
+os.close(_test_db_fd)
+TEST_DATABASE_URL = f"sqlite+aiosqlite:///{_test_db_path}"
+
+test_engine = create_async_engine(
+    TEST_DATABASE_URL,
+    echo=False,
+    poolclass=NullPool,
+    connect_args={"check_same_thread": False},
+)
+
+test_async_session_factory = async_sessionmaker(
+    test_engine,
+    class_=AsyncSession,
+    expire_on_commit=False,
+    autoflush=False,
+)
+
+
+async def test_get_session() -> AsyncSession:
+    async with test_async_session_factory() as session:
+        try:
+            yield session
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise
+        finally:
+            await session.close()
+
+
+async def test_init_db():
+    async with test_engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+        # Seed observatorio
+        await conn.execute(
+            Observatorio.__table__.insert().values(
+                id=1, nombre="Riguel", latitud=40.4168, longitud=-3.7038,
+                altitud_msnm=650.0, zona_horaria="Europe/Madrid"
+            ).prefix_with("OR IGNORE")
+        )
+        # Seed filtros
+        await conn.execute(
+            Filtro.__table__.insert().values(
+                nombre="L", descripcion="Luminancia", onda_central_nm=None, orden=1, activo=1
+            ).prefix_with("OR IGNORE")
+        )
+        await conn.execute(
+            Filtro.__table__.insert().values(
+                nombre="R", descripcion="Rojo", onda_central_nm=656, orden=2, activo=1
+            ).prefix_with("OR IGNORE")
+        )
+        await conn.execute(
+            Filtro.__table__.insert().values(
+                nombre="G", descripcion="Verde", onda_central_nm=540, orden=3, activo=1
+            ).prefix_with("OR IGNORE")
+        )
+        await conn.execute(
+            Filtro.__table__.insert().values(
+                nombre="B", descripcion="Azul", onda_central_nm=450, orden=4, activo=1
+            ).prefix_with("OR IGNORE")
+        )
+        await conn.execute(
+            Filtro.__table__.insert().values(
+                nombre="Ha", descripcion="H-alpha", onda_central_nm=656.3, orden=5, activo=1
+            ).prefix_with("OR IGNORE")
+        )
+        await conn.execute(
+            Filtro.__table__.insert().values(
+                nombre="OIII", descripcion="Oxigeno III", onda_central_nm=500.7, orden=6, activo=1
+            ).prefix_with("OR IGNORE")
+        )
+
+
+@pytest_asyncio.fixture
 async def client():
-    transport = ASGITransport(app=app)
+    """Create a test client with in-memory database."""
+    from fastapi import FastAPI
+    from fastapi.middleware.cors import CORSMiddleware
+    from app.api.v1 import observatorio, filtros, observaciones, export
+    from contextlib import asynccontextmanager
+
+    # Initialize database for this test
+    await test_init_db()
+
+    @asynccontextmanager
+    async def test_lifespan(app: FastAPI):
+        yield
+        await test_engine.dispose()
+
+    test_app = FastAPI(
+        title="Riguel Cuaderno de Campo Astronómico (Test)",
+        description="API para registro de observaciones astronómicas del grupo Riguel",
+        version="1.0.0",
+        lifespan=test_lifespan,
+    )
+
+    test_app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["http://localhost:5173"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+    test_app.include_router(observatorio.router, prefix="/api/v1/observatorio", tags=["Observatorio"])
+    test_app.include_router(filtros.router, prefix="/api/v1/filtros", tags=["Filtros"])
+    test_app.include_router(observaciones.router, prefix="/api/v1/observaciones", tags=["Observaciones"])
+    test_app.include_router(export.router, prefix="/api/v1/export", tags=["Export"])
+
+    @test_app.get("/health")
+    async def health_check():
+        return {"status": "ok", "service": "riguel-cuaderno-api"}
+
+    # Override the get_session dependency
+    test_app.dependency_overrides[get_session] = test_get_session
+
+    transport = ASGITransport(app=test_app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac
+
+    # Cleanup
+    test_app.dependency_overrides.clear()
+
+
+@pytest.fixture(autouse=True, scope="session")
+def cleanup_test_db():
+    yield
+    # Clean up test database file after all tests
+    if os.path.exists(_test_db_path):
+        os.unlink(_test_db_path)
 
 
 @pytest.mark.asyncio
@@ -93,7 +230,7 @@ async def test_observaciones_crud(client):
         json={
             "objeto": "M42",
             "fecha_hora_utc": "2026-10-10T22:00:00Z",
-            "seeing": 3,
+            "fwhm": 2.5,
             "temperatura": 15.0,
             "humedad": 60,
             "sesiones_captura": [
@@ -129,10 +266,10 @@ async def test_observaciones_crud(client):
     # Update
     resp = await client.put(
         f"/api/v1/observaciones/{obs_id}",
-        json={"seeing": 4},
+        json={"fwhm": 3.2},
     )
     assert resp.status_code == 200
-    assert resp.json()["seeing"] == 4
+    assert resp.json()["fwhm"] == 3.2
 
     # Duplicate
     resp = await client.post(f"/api/v1/observaciones/{obs_id}/duplicate")
@@ -158,7 +295,7 @@ async def test_observaciones_filter_by_filtro(client):
         json={
             "objeto": "NGC7000",
             "fecha_hora_utc": "2026-10-10T23:00:00Z",
-            "seeing": 2,
+            "fwhm": 3.5,
             "filtro_id": 1,
             "sesiones_captura": [],
         },
@@ -180,7 +317,7 @@ async def test_observaciones_filter_by_date_range(client):
         json={
             "objeto": "M31",
             "fecha_hora_utc": "2026-10-05T22:00:00Z",
-            "seeing": 3,
+            "fwhm": 2.5,
             "sesiones_captura": [],
         },
     )
@@ -189,7 +326,7 @@ async def test_observaciones_filter_by_date_range(client):
         json={
             "objeto": "M33",
             "fecha_hora_utc": "2026-10-15T22:00:00Z",
-            "seeing": 3,
+            "fwhm": 2.5,
             "sesiones_captura": [],
         },
     )
@@ -212,10 +349,68 @@ async def test_export_csv_single_table(client):
 
 @pytest.mark.asyncio
 async def test_export_csv_all_zip(client):
-    """Test CSV export for all tables (returns ZIP)."""
+    """Test CSV export for all tables (returns combined CSV)."""
     resp = await client.get("/api/v1/export/csv?tabla=all")
     assert resp.status_code == 200
-    assert "application/zip" in resp.headers["content-type"]
+    assert "text/csv" in resp.headers["content-type"]
+
+
+def _extract_pdf_text(pdf_bytes: bytes) -> str:
+    """Extract visible text from a ReportLab PDF.
+
+    ReportLab encodes content streams with /Filter [ /ASCII85Decode /FlateDecode ],
+    so decode ASCII85 first, then Flate, then pull the (...) Tj string operands.
+    """
+    chunks = []
+    for raw in re.findall(rb"stream\r?\n(.*?)endstream", pdf_bytes, re.S):
+        raw = raw.strip(b"\r\n")
+        if raw.startswith(b"<") or raw.endswith(b"~>"):
+            try:
+                raw = base64.a85decode(raw, adobe=True)
+            except Exception:
+                pass
+        try:
+            raw = zlib.decompress(raw)
+        except Exception:
+            pass
+        for match in re.finditer(rb"\((?:[^()\\]|\\.)*\)", raw):
+            text = match.group(0)[1:-1]
+            text = text.replace(b"\\(", b"(").replace(b"\\)", b")").replace(b"\\\\", b"\\")
+            chunks.append(text.decode("latin-1"))
+    return " ".join(chunks)
+
+
+@pytest.mark.asyncio
+async def test_export_pdf_campana_includes_fwhm(client):
+    """Test the campaign PDF shows the average FWHM per object."""
+    for objeto, fecha, fwhm in [
+        ("M42", "2026-09-10T22:00:00Z", 2.5),
+        ("M42", "2026-09-11T22:00:00Z", 3.5),
+        ("NGC7000", "2026-09-12T22:00:00Z", 1.8),
+    ]:
+        resp = await client.post(
+            "/api/v1/observaciones",
+            json={
+                "objeto": objeto,
+                "fecha_hora_utc": fecha,
+                "fwhm": fwhm,
+                "sesiones_captura": [],
+            },
+        )
+        assert resp.status_code == 201
+
+    resp = await client.get(
+        "/api/v1/export/pdf/campana?fecha_desde=2026-09-01T00:00:00Z&fecha_hasta=2026-09-30T23:59:59Z"
+    )
+    assert resp.status_code == 200
+    assert "application/pdf" in resp.headers["content-type"]
+
+    text = _extract_pdf_text(resp.content)
+    assert "FWHM medio" in text
+    assert '3.0"' in text  # mean of 2.5 and 3.5
+    assert '1.8"' in text  # single observation for NGC7000
+    assert "M42" in text
+    assert "NGC7000" in text
 
 
 @pytest.mark.asyncio

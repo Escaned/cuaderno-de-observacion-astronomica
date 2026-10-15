@@ -12,7 +12,7 @@ class Observacion(Base):
     objeto = Column(String(100), nullable=False, index=True)
     fecha_hora_utc = Column(DateTime, nullable=False, index=True)
     filtro_id = Column(Integer, ForeignKey("filtros.id"), nullable=True)
-    seeing = Column(Integer, nullable=False)
+    fwhm = Column(Float, nullable=False)
     temperatura = Column(Float, nullable=True)
     humedad = Column(Integer, nullable=True)
     viento_kph = Column(Float, nullable=True)
@@ -27,7 +27,7 @@ class Observacion(Base):
     sesiones_captura = relationship("SesionCaptura", back_populates="observacion", cascade="all, delete-orphan")
 
     __table_args__ = (
-        CheckConstraint("seeing BETWEEN 1 AND 5", name="ck_observacion_seeing_range"),
+        CheckConstraint("fwhm >= 0.5 AND fwhm <= 10.0", name="ck_observacion_fwhm_range"),
         CheckConstraint("humedad IS NULL OR (humedad >= 0 AND humedad <= 100)", name="ck_observacion_humedad_range"),
         Index("ix_observaciones_fecha_objeto", "fecha_hora_utc", "objeto"),
     )
