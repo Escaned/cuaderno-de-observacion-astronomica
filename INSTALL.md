@@ -155,17 +155,33 @@ cp .env.example backend/.env       # Linux / macOS
 
 ## 6. Ejecutar los tests
 
-**Backend** (esperado: 22 pasan, 2 se saltean):
+**Backend** (esperado: 27 pasan, 2 se saltean):
 ```bash
 cd backend
 pytest
 ```
 
-**Frontend** (esperado: 18 pasan):
+**Frontend** (esperado: 22 pasan):
 ```bash
 cd frontend
 npm test -- --run
 ```
+
+**End-to-end en un navegador real** (con los dos servidores corriendo y Chrome o Edge instalados):
+```bash
+cd frontend
+npm run e2e
+```
+
+Es la única verificación que atrapa fallas de carga de módulos, que el `npm test` y el `npm run build` no pueden ver.
+Abre un navegador headless, recorre las 5 pantallas comprobando que el logo y el nombre carguen de verdad, hace el
+click-through completo de `/admin/asociacion` (guardar nombre, subir logo, quitar logo) y **restaura el estado original**
+al terminar. Opciones:
+
+- `npm run e2e -- --read-only` — no modifica ningún dato
+- `npm run e2e -- --headed` — muestra la ventana del navegador mientras trabaja
+
+No necesita dependencias: usa el Node del sistema (requiere Node 22 o superior).
 
 ---
 
@@ -178,6 +194,12 @@ npm test -- --run
 | `alembic: command not found` | El entorno virtual no está activado | Activá el venv (paso 2.2) |
 | El frontend no trae datos | El backend está apagado o el puerto 8000 está ocupado | Verificá http://localhost:8000/health |
 | `Address already in use` al arrancar | Ya hay algo en el puerto 8000 o 5173 | Cerrá el proceso previo o cambiá `API_PORT` en `.env` |
+| El frontend queda en **pantalla en blanco** y la consola del navegador dice `does not provide an export named ...` | El servidor de Vite quedó sirviendo una versión vieja de un módulo (file-watching poco fiable en Windows). La terminal de Vite se ve limpia y `npm run build` pasa igual | Reiniciá `npm run dev`: matá el árbol de procesos de npm/vite y levantalo de nuevo. Recargar el navegador **no** alcanza |
+| Cambiaste código del backend y **no se refleja**: `/health` responde, pero un endpoint nuevo da 404 | `uvicorn --reload` dejó un worker huérfano sirviendo código viejo | Matá **todos** los procesos `python run.py` y sus hijos (`multiprocessing-fork`), y arrancá de nuevo |
+
+> Los dos últimos síntomas son la misma clase de problema (file-watching poco fiable en Windows) en cada mitad del
+> stack. Si algo "no se actualiza" y el código en disco está bien, **reiniciá el servidor** antes de dudar del código.
+> `npm run e2e` (sección 6) detecta el caso del frontend automáticamente.
 
 ---
 
