@@ -586,14 +586,29 @@ try {
 
 # --- Generar el ZIP del ejecutable -----------------------------------------
 if (Test-Path $zipExe) { Remove-Item $zipExe -Force }
+# Se comprime $appExe (dist\Riguel), no $distExe, para que el ZIP descomprima directo
+# en una carpeta Riguel\. Comprimiendo dist\, quien abre el ZIP se topaba primero con un
+# directorio llamado dist: una carpeta de build que no le dice nada y que contradice lo
+# que le promete INSTALL.md, donde adentro del ZIP hay una carpeta Riguel y nada mas.
 [System.IO.Compression.ZipFile]::CreateFromDirectory(
-    $distExe,
+    $appExe,
     $zipExe,
     [System.IO.Compression.CompressionLevel]::Optimal,
     $true
 )
 $mbZipExe = [math]::Round((Get-Item $zipExe).Length / 1MB, 2)
-Escribir-Ok "$nombre-exe.zip ($mbZipExe MB)"
+
+# Que descomprima en una sola carpeta Riguel\ es parte de lo que la guia le promete al
+# usuario, asi que se comprueba leyendo el ZIP en vez de confiar en la ruta que le
+# pasamos: es justo el detalle que se nos paso la primera vez.
+$lector = [System.IO.Compression.ZipFile]::OpenRead($zipExe)
+try {
+    $raices = @($lector.Entries | ForEach-Object { ($_.FullName -replace '\\','/').Split('/')[0] } | Sort-Object -Unique)
+    if ($raices.Count -ne 1 -or $raices[0] -ne 'Riguel') {
+        throw "El ZIP del ejecutable descomprime en '$($raices -join ', ')' y deberia descomprimir en una sola carpeta Riguel."
+    }
+} finally { $lector.Dispose() }
+Escribir-Ok "$nombre-exe.zip ($mbZipExe MB, descomprime en una carpeta Riguel)"
 
 Remove-Item $tmpExe -Recurse -Force -ErrorAction SilentlyContinue
 
