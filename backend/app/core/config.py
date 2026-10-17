@@ -10,6 +10,12 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
+    # The defaults below are relative paths, which is what running from source
+    # relies on: arrancar.bat does `cd backend` first. The packaged launcher cannot
+    # rely on the working directory, so it sets DATABASE_URL, IMAGES_DIR, API_HOST
+    # and API_PORT before this module is imported. Environment variables take
+    # precedence over the .env file, so those win when they are present.
+
     # Database
     database_url: str = "sqlite+aiosqlite:///./riguel.db"
 

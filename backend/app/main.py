@@ -1,11 +1,11 @@
 from contextlib import asynccontextmanager
-from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
+from app.core import paths
 from app.core.config import settings
 from app.core.database import init_db, close_db
 from app.api.v1 import observatorio, filtros, observaciones, export
@@ -13,7 +13,10 @@ from app.api.v1 import observatorio, filtros, observaciones, export
 # The built frontend (created by `npm run build`). When it exists the backend also
 # serves the web app, so a normal install needs a single server and no Node.js.
 # During development it is ignored: Vite serves the app on its own port.
-FRONTEND_DIST = Path(__file__).resolve().parents[2] / "frontend" / "dist"
+# Resolved through `paths` so a packaged build finds it inside the bundle: the
+# location used to be derived from this file's position, which means nothing once
+# the application is frozen.
+FRONTEND_DIST = paths.bundle_root() / "frontend" / "dist"
 
 # Paths that must never fall through to the SPA. They belong to the API or to the
 # mounted static files, so an unknown one has to stay a plain 404 instead of

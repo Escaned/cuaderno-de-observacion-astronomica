@@ -23,7 +23,12 @@ if config.config_file_name is not None:
 
 target_metadata = Base.metadata
 
-config.set_main_option("sqlalchemy.url", settings.database_url)
+# When the migrations are driven from code the caller has already put the URL here,
+# and it has to win. Falling back to the settings instead would quietly migrate
+# whatever `./riguel.db` happens to sit in the working directory. The command line
+# leaves this unset, so it keeps reading the URL from the settings as before.
+if not config.get_main_option("sqlalchemy.url"):
+    config.set_main_option("sqlalchemy.url", settings.database_url)
 
 
 def run_migrations_offline() -> None:
