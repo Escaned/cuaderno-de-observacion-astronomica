@@ -118,3 +118,63 @@ The four launcher warnings are the main outstanding debt: they are exactly the p
 something is already wrong (database locked, port busy), which is when a clear message matters most.
 They are worth their own small change, since `run()` is only testable if the launcher is refactored to
 take its collaborators as arguments.
+
+## Correction (added 2026-10-17, after the archive)
+
+This report missed a real defect, and one of its verdicts was wrong. The verdict is corrected here
+rather than edited out, because the point of this file is to be the trail.
+
+### What was wrong
+
+The `distribution` scenario `Clean artifact` was graded SUGGESTION, on the grounds that the packaging
+asserts the absence of `node_modules`, `.venv` and `riguel.db`. That assertion is real, but it is only
+three paths, and the packaging was shipping far more than that:
+
+| Shipped | Size | Where it came from |
+|---|---|---|
+| `build\exe\` | 102.8 MB on disk | leftovers of the hand build done for task 3.3 |
+| `dist\Riguel\` | 54.8 MB | the executable built by this change's own `-ConExe` stage |
+| `.git\` | 301 entries, ~1 MB | the full history of a **private** repository |
+
+The ZIP was 106.76 MB and carried **three copies of `Riguel.exe`**. Three verification runs had taken
+it end to end and all three passed, because nothing was looking for any of this.
+
+The `.git` leak predates this change: `d3a9232` already called `robocopy /E /XD` with a list that never
+included `.git`, so every ZIP handed out before this one carried the same thing. `build` and `dist`
+were introduced by this change, because the `-ConExe` stage writes the executable into the repository
+root and the next packaging run copies its own output into the package.
+
+So the honest record is: the artifact table above says 106.9 MB and that number was not a curiosity, it
+was the defect. The package should have been 0.3 MB, "No development state ships" was **not**
+satisfied, and the verdict for `Clean artifact` was **FAIL**, not SUGGESTION.
+
+### What was done about it
+
+A follow-up commit fixed `empaquetar.ps1`:
+
+- `.git`, `build` and `dist` were added to the exclusion list. The last two go in as full paths
+  because `robocopy /XD` matches by NAME, so a bare `dist` would also have removed `frontend\dist` -
+  the compiled frontend the package cannot work without.
+- `openspec` was added as well: the SDD artifacts belong to the repository, not to whoever installs the
+  program.
+- The verification's forbidden-path list grew from three paths to seven, which is what stops this from
+  coming back unnoticed.
+- A size guard was added (fail above 10 MB, against a healthy package of 0.3 MB).
+
+### Re-verified
+
+The full packaging run was repeated **with `build\`, `dist\`, `.git\` and `openspec\` present in the
+repository** - the exact condition that produced the defect. Result: exit 0, `PAQUETE LISTO Y
+VERIFICADO`, 0.3 MB, and all six end-to-end checks green (install, boot, UI/routing/API, IPv4 probe,
+404s, clean database with the default logo).
+
+The archive folder was then compared against `git ls-files` entry by entry: 113 tracked files plus the
+three generated `frontend/dist` assets, and the only tracked files missing are the 15 under
+`openspec\`. `Clean artifact` is now PASS.
+
+### Still open after the correction
+
+The `distribution` spec scenario asks for a clean artifact without enumerating what "development
+state" means. That vagueness is how a list of three paths looked sufficient for a while. The
+implementation is now stricter than the spec. Rewriting the scenario to state what must not ship is a
+small change worth making; it was left out deliberately so that this hotfix stayed a hotfix.

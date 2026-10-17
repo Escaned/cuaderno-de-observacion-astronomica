@@ -111,12 +111,32 @@ Escribir-Paso "2/$pasos  Armando el paquete"
 if (Test-Path $tmpBase) { Remove-Item $tmpBase -Recurse -Force }
 New-Item -ItemType Directory -Path $stage -Force | Out-Null
 
-$dirsExcluidos  = @('node_modules', '.venv', 'venv', '__pycache__', '.pytest_cache', '.mypy_cache', '.ruff_cache')
+# robocopy NO lee .gitignore: hay que decirle todo a mano. Nada de esta lista es
+# capricho, cada cosa se colo alguna vez o se colaria sola:
+#   .git       el historial completo del repositorio. El repo es privado, asi que
+#              esto no es desprolijidad: es mandarle el historial entero a quien
+#              recibe el paquete.
+#   build/dist salidas de PyInstaller. Pesan cientos de MB y ademas confunden: quien
+#              recibe la version con scripts se encuentra un Riguel.exe adentro.
+#   openspec   los artefactos del flujo SDD. Son para el repositorio, no para quien
+#              instala el programa.
+$dirsExcluidos = @(
+    'node_modules', '.venv', 'venv', '__pycache__', '.pytest_cache', '.mypy_cache', '.ruff_cache',
+    '*.egg-info', '.git', '.atl', '.idea', '.vscode'
+)
+# Estos tres van SOLO en la raiz, y por eso llevan ruta completa: robocopy /XD compara
+# por NOMBRE, asi que un '/XD dist' a secas se llevaria tambien frontend\dist, que es
+# justo el compilado que el paquete necesita para funcionar sin Node.
+$dirsExcluidosRaiz = @(
+    (Join-Path $raiz 'build'),
+    (Join-Path $raiz 'dist'),
+    (Join-Path $raiz 'openspec')
+)
 # *.zip tambien se excluye: el ZIP de salida se genera en la raiz del proyecto y, si
-# no se filtra, robocopy lo mete dentro del paquete nuevo (robocopy no lee .gitignore).
+# no se filtra, robocopy lo mete dentro del paquete nuevo.
 $archExcluidos  = @('riguel.db', '*.pyc', '*.pyo', '*.tsbuildinfo', '*.log', '*.zip')
 
-robocopy $raiz $stage /E /XD @dirsExcluidos /XF @archExcluidos /NFL /NDL /NJH /NJS /NP | Out-Null
+robocopy $raiz $stage /E /XD @dirsExcluidos @dirsExcluidosRaiz /XF @archExcluidos /NFL /NDL /NJH /NJS /NP | Out-Null
 if ($LASTEXITCODE -ge 8) { throw "robocopy fallo (codigo $LASTEXITCODE)." }
 
 # Fotos subidas por el usuario: no viajan (solo el logo por defecto y el .gitkeep).
@@ -126,7 +146,7 @@ if (Test-Path $dirImagenes) {
     foreach ($f in $sobran) { Remove-Item $f.FullName -Force }
     if ($sobran) { Escribir-Aviso "saque $($sobran.Count) imagen(es) subida(s) por el usuario" }
 }
-Escribir-Ok 'copiado sin node_modules, .venv, base de datos ni fotos propias'
+Escribir-Ok 'copiado sin .git, sin build/dist, sin openspec, sin .venv ni fotos propias'
 
 # ---------------------------------------------------------------------------
 # 3. Generar el ZIP
@@ -165,14 +185,30 @@ if (-not (Test-Path (Join-Path $appDir 'instalar.bat'))) {
     throw "El ZIP no contiene la estructura esperada (falta instalar.bat dentro de $nombre)."
 }
 
-# El ZIP no debe traer nada de desarrollo.
-foreach ($prohibido in @('frontend\node_modules', '.venv', 'backend\riguel.db')) {
+# El ZIP no debe traer nada de desarrollo. Los cuatro ultimos NO son higiene: se
+# colaron de verdad. .git viajaba desde antes de este cambio (el repo es privado, asi
+# que era el historial entero saliendo de casa), y build/dist los trajo la propia
+# etapa -ConExe, porque la primera corrida los dejaba en la raiz y la segunda los
+# copiaba dentro del paquete. Con el control de las tres rutas de siempre, ninguno de
+# esos cuatro se notaba: el ZIP pesaba 107 MB con tres copias de Riguel.exe adentro.
+foreach ($prohibido in @('frontend\node_modules', '.venv', 'backend\riguel.db',
+                         '.git', 'build', 'dist', 'openspec')) {
     if (Test-Path (Join-Path $appDir $prohibido)) {
         throw "El ZIP contiene $prohibido y no deberia."
     }
 }
 if (-not (Test-Path (Join-Path $appDir 'frontend\dist\index.html'))) {
     throw 'El ZIP no incluye el frontend compilado: no funcionaria sin Node.'
+}
+
+# Red de seguridad por tamano. Vale aclarar que este numero NO es el tamanio esperado:
+# el paquete sano pesa 0,3 MB (844 KB descomprimido). El limite tiene 30x de aire para
+# que un frontend que crezca no lo haga saltar con un paquete que esta bien.
+# Tampoco reemplaza a la lista de arriba: .git pesaba 1 MB y este guard no lo habria
+# visto jamas. Lo que encuentra es la basura grande (un build, un .venv, un
+# node_modules), que es exactamente el caso que nos paso.
+if ($mb -gt 10) {
+    throw "El ZIP pesa $mb MB y lo normal son 0,3: algo grande se colo. Revisa las exclusiones de robocopy."
 }
 Escribir-Ok 'el ZIP trae el frontend compilado y nada de desarrollo'
 
