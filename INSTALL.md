@@ -12,10 +12,16 @@ quedan en tu disco.
 | | |
 |---|---|
 | **Sistema** | Windows 10 u 11 |
-| **Python** | 3.12 o superior — [descargar](https://www.python.org/downloads/windows/) |
+| **Python** | **3.12 o 3.13** — [descargar](https://www.python.org/downloads/windows/) |
 | **Navegador** | Chrome, Edge, Firefox o cualquier otro |
 
 Eso es todo. **No hace falta Node.js, ni Docker, ni instalar una base de datos.**
+
+> ⚠️ **Necesitás 3.12 o 3.13. Con 3.14 la instalación falla.** No es un capricho: una de las
+> dependencias viene compilada distinto para cada versión de Python, y todavía no hay versión
+> compilada para 3.14.
+>
+> Si ya tenés 3.14 instalado no hace falta desinstalarlo: instalá 3.13 al lado y listo.
 
 > ⚠️ Al instalar Python, marcá la casilla **Add python.exe to PATH** en la primera pantalla del
 > instalador. Si no lo hacés, después el instalador de la aplicación no va a encontrar Python.
@@ -23,7 +29,7 @@ Eso es todo. **No hace falta Node.js, ni Docker, ni instalar una base de datos.*
 Si preferís la línea de comandos, en Windows también sirve:
 
 ```powershell
-winget install -e --id Python.Python.3.12
+winget install -e --id Python.Python.3.13
 ```
 
 ---
@@ -97,7 +103,9 @@ restaurar todo en cualquier momento: pegalos de vuelta en su lugar y listo.
 | Qué pasa | Qué hacer |
 |---|---|
 | **`instalar.bat` dice que no encuentra Python** | Instalá Python desde [python.org](https://www.python.org/downloads/windows/) marcando *Add python.exe to PATH*. Después cerrá la ventana y volvé a ejecutar `instalar.bat` |
-| **`instalar.bat` dice que el Python es viejo** | Necesitás 3.12 o superior. Instalá una versión nueva y volvé a empezar |
+| **`instalar.bat` dice que tu Python no sirve para esta aplicación** | Hace falta 3.12 o 3.13. Si tenés 3.14, instalá la 3.13 al lado (no hace falta desinstalar nada): `winget install -e --id Python.Python.3.13` |
+| **Mientras instala las dependencias aparece `Preparing metadata (pyproject.toml)`, `maturin` o `Rust`** | El Python de tu equipo no sirve para esta aplicación (casi siempre es 3.14). Instalá 3.13 y después **borrá la carpeta `.venv`** que está junto a `instalar.bat`, y volvé a ejecutarlo. El paso de borrar `.venv` no es opcional: si queda, se reutiliza el entorno viejo y el error se repite |
+| **Dice `El entorno que habia es de Python ... y ahora uso ...`** | No es un error: `instalar.bat` se dio cuenta de que cambiaste de versión de Python, borró el entorno viejo y lo armó de nuevo |
 | **La ventana negra se cierra al instante** | Ejecutá `instalar.bat` desde una terminal para leer el error: abrí *Símbolo del sistema*, entrá a la carpeta con `cd` y escribí `instalar.bat` |
 | **"Address already in use"** al arrancar | Ya hay algo usando el puerto 8000 (a veces, una aplicación anterior que quedó abierta). Cerrá la ventana negra que hayas dejado abierta y volvé a intentar |
 | **El navegador abre pero la página está en blanco** | Esperá unos segundos y recargá (`F5`). Si sigue, arrancá de nuevo con `arrancar.bat` |

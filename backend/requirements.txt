@@ -14,6 +14,13 @@ alembic==1.13.1
 aiosqlite==0.19.0
 
 # Validacion y configuracion
+#
+# OJO con el tope <2.9 de pydantic. pydantic 2.8 arrastra pydantic-core 2.20.1, que
+# esta escrito en Rust y solo publica ruedas compiladas hasta Python 3.13. Con Python
+# 3.14 pip no encuentra rueda, intenta compilarlo y la instalacion falla pidiendo Rust
+# (maturin / "Preparing metadata (pyproject.toml)"). Por eso instalar.bat exige 3.12 o
+# 3.13. Para levantar este tope hay que subir pydantic-core (>= 2.35, o sea pydantic
+# >= 2.12) y fastapi (>= 0.118.1), y verificar toda la app: DESARROLLO.md, seccion 6.
 pydantic>=2.7,<2.9
 pydantic-settings>=2.3,<2.5
 python-dotenv==1.0.1
