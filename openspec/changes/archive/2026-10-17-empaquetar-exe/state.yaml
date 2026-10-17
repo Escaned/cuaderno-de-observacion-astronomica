@@ -1,0 +1,30 @@
+change: empaquetar-exe
+created: 2026-10-17
+artifact_store: openspec+engram
+execution_mode: interactive
+delivery_strategy: ask-on-risk
+chain_strategy: stacked-to-main   # translated to this repo: two ordered commits on main, no branches
+
+phases:
+  init: done
+  explore: skipped   # the codebase was already read during planning; see proposal.md # Approach
+  proposal: done
+  specs: done
+  design: done
+  tasks: done
+  apply: done   # unit 1 (phases 1-2) committed as 8bba972; unit 2 (phases 3-4) implemented, phase 5 green
+  verify: done   # 2026-10-17: PASS with warnings. 0 CRITICAL, 5 WARNING (untested spec scenarios), 5 SUGGESTION
+  archive: done   # 2026-10-17: three domains promoted to openspec/specs/, change moved to changes/archive/
+
+notes: |
+  Frozen format decided with the maintainer: PyInstaller ONE-DIR + console window.
+  Rejected for now: one-file (2-5s startup, more Defender false positives) and a tray icon
+  (adds pystray, more surface for little gain in v1).
+  instalar.bat / arrancar.bat are NOT removed: they stay as the alternative distribution.
+
+forecast:
+  estimated_changed_lines: 630
+  budget_risk: High
+  chained_recommended: true
+  suggested_split: 'unit 1 = frozen-ready app (paths, migrations, desktop.py, tests) / unit 2 = build and verify the exe, plus docs'
+  decision: resolved   # 2026-10-17: the maintainer chose two ordered commits on main (ask-on-risk satisfied, no size:exception)
