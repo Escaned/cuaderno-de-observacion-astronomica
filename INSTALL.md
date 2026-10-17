@@ -12,53 +12,51 @@ quedan en tu disco.
 | | |
 |---|---|
 | **Sistema** | Windows 10 u 11 |
-| **Python** | **3.12 o 3.13** — [descargar](https://www.python.org/downloads/windows/) |
 | **Navegador** | Chrome, Edge, Firefox o cualquier otro |
 
-Eso es todo. **No hace falta Node.js, ni Docker, ni instalar una base de datos.**
-
-> ⚠️ **Necesitás 3.12 o 3.13. Con 3.14 la instalación falla.** No es un capricho: una de las
-> dependencias viene compilada distinto para cada versión de Python, y todavía no hay versión
-> compilada para 3.14.
->
-> Si ya tenés 3.14 instalado no hace falta desinstalarlo: instalá 3.13 al lado y listo.
-
-> ⚠️ Al instalar Python, marcá la casilla **Add python.exe to PATH** en la primera pantalla del
-> instalador. Si no lo hacés, después el instalador de la aplicación no va a encontrar Python.
-
-Si preferís la línea de comandos, en Windows también sirve:
-
-```powershell
-winget install -e --id Python.Python.3.13
-```
+Eso es todo. **No hace falta instalar Python, ni Node.js, ni nada.** El programa ya viene listo para
+usar.
 
 ---
 
 ## Instalación (2 pasos)
 
-### Paso 1 — Instalar
+### Paso 1 — Descomprimir
 
-Descomprimí el ZIP donde quieras (por ejemplo en `Documentos`) y hacé **doble clic en `instalar.bat`**.
-
-Se abre una ventana negra que va mostrando el progreso. Tarda **un par de minutos** la primera vez,
-porque descarga las dependencias. Cuando termine vas a ver:
+Descomprimí el ZIP donde quieras (por ejemplo en `Documentos`). Adentro vas a encontrar una carpeta
+`Riguel` con dos cosas:
 
 ```
-============================================================
-  INSTALACION COMPLETA
-============================================================
+Riguel\
+  Riguel.exe        <- el programa
+  _internal\        <- lo que el programa necesita para funcionar
 ```
+
+> ⚠️ **La carpeta se usa entera.** `Riguel.exe` solo no funciona: necesita la carpeta `_internal` que
+> está al lado. Si lo sacás de ahí, o si lo mandás solo por correo o WhatsApp, no arranca.
+>
+> Para moverlo de una computadora a otra, copiá **la carpeta `Riguel` completa**.
 
 > ⚠️ **Descomprimí el ZIP antes de usarlo.** Si hacés doble clic adentro del ZIP comprimido, o desde
-> una carpeta temporal, la instalación puede fallar.
+> una carpeta temporal, los datos se pueden perder.
 
-### Paso 2 — Usar
+### Paso 2 — Doble clic en `Riguel.exe`
 
-Hacé **doble clic en `arrancar.bat`**. Se abre el navegador solo, en:
+Se abre una ventana negra con el progreso y, unos segundos después, tu navegador en:
 
 **http://localhost:8000**
 
 Si el navegador no se abre, escribí esa dirección a mano.
+
+> ⚠️ **La primera vez, Windows puede avisarte que "Windows protegió tu PC".** Es normal y tiene
+> explicación: el programa no está firmado digitalmente (firmarlo sale plata) y Windows desconfía de
+> cualquier ejecutable nuevo que baje de internet.
+>
+> Para continuar: clic en **Más información** y después en **Ejecutar de todas formas**. Se pregunta
+> una sola vez.
+
+La ventana negra es el motor de la aplicación. **Mientras esté abierta, la aplicación funciona.** Si
+la cerrás, se cierra la aplicación.
 
 ---
 
@@ -66,14 +64,15 @@ Si el navegador no se abre, escribí esa dirección a mano.
 
 | Quiero… | Cómo |
 |---|---|
-| Abrir la aplicación | Doble clic en `arrancar.bat` |
-| Cerrarla | Cerrá la **ventana negra** (o `Ctrl+C` adentro) |
+| Abrir la aplicación | Doble clic en `Riguel.exe` |
+| Cerrarla | Cerrá la **ventana negra** |
+| Tenerla a mano | Clic derecho en `Riguel.exe` → *Anclar a la barra de tareas* |
 | Cambiar el nombre o el logo del grupo | Menú lateral → **Asociación** |
 | Descargar un informe | Pantalla **Exportar** |
 | Registrarlo todo de nuevo | No hace falta: los datos quedan guardados entre sesiones |
 
-La aplicación **no se instala como servicio**: se abre cuando la arrancás y se cierra cuando cerrás
-la ventana. Nada queda corriendo de fondo.
+La aplicación **no se instala como servicio**: se abre cuando la arrancás y se cierra cuando cerrás la
+ventana. Nada queda corriendo de fondo.
 
 **Tu primera observación:** hacé clic en *Nueva observación* y seguí el asistente de 3 pasos
 (**datos de la noche** → **sesiones de captura** → **calibraciones**). La mayoría de los campos se
@@ -83,12 +82,12 @@ completan solos con valores razonables.
 
 ## Dónde están tus datos (importante)
 
-Todo vive dentro de la carpeta de la aplicación:
+Todo vive en la carpeta `data`, adentro de la carpeta de la aplicación:
 
 | Qué | Dónde |
 |---|---|
-| Observaciones, filtros, configuración | `backend\riguel.db` |
-| Fotos y el logo | `backend\data\imagenes\` |
+| Observaciones, filtros, configuración | `data\riguel.db` |
+| Fotos y el logo | `data\imagenes\` |
 
 **Para hacer una copia de seguridad alcanza con copiar esos dos.** Guardalos juntos y vas a poder
 restaurar todo en cualquier momento: pegalos de vuelta en su lugar y listo.
@@ -98,19 +97,30 @@ restaurar todo en cualquier momento: pegalos de vuelta en su lugar y listo.
 
 ---
 
+## Si venías de la versión anterior (la de `instalar.bat`)
+
+Tus observaciones **no se pierden**. La versión nueva las adopta sola:
+
+1. Copiá a un lugar seguro tu carpeta `backend\riguel.db` — es tu base con todo lo que cargaste.
+2. En la carpeta nueva, creá una carpeta llamada `backend` y pegá ahí ese `riguel.db`.
+3. Abrí `Riguel.exe`. La ventana negra te va a avisar que encontró la base anterior y la copió.
+   El archivo viejo queda donde estaba, no se toca.
+4. **Las fotos y el logo que hayas subido** sí hay que copiarlos a mano: pasalos de
+   `backend\data\imagenes\` a `data\imagenes\`. El logo por defecto se repone solo.
+
+---
+
 ## Si algo no funciona
 
 | Qué pasa | Qué hacer |
 |---|---|
-| **`instalar.bat` dice que no encuentra Python** | Instalá Python desde [python.org](https://www.python.org/downloads/windows/) marcando *Add python.exe to PATH*. Después cerrá la ventana y volvé a ejecutar `instalar.bat` |
-| **`instalar.bat` dice que tu Python no sirve para esta aplicación** | Hace falta 3.12 o 3.13. Si tenés 3.14, instalá la 3.13 al lado (no hace falta desinstalar nada): `winget install -e --id Python.Python.3.13` |
-| **Mientras instala las dependencias aparece `Preparing metadata (pyproject.toml)`, `maturin` o `Rust`** | El Python de tu equipo no sirve para esta aplicación (casi siempre es 3.14). Instalá 3.13 y después **borrá la carpeta `.venv`** que está junto a `instalar.bat`, y volvé a ejecutarlo. El paso de borrar `.venv` no es opcional: si queda, se reutiliza el entorno viejo y el error se repite |
-| **Dice `El entorno que habia es de Python ... y ahora uso ...`** | No es un error: `instalar.bat` se dio cuenta de que cambiaste de versión de Python, borró el entorno viejo y lo armó de nuevo |
-| **La ventana negra se cierra al instante** | Ejecutá `instalar.bat` desde una terminal para leer el error: abrí *Símbolo del sistema*, entrá a la carpeta con `cd` y escribí `instalar.bat` |
-| **"Address already in use"** al arrancar | Ya hay algo usando el puerto 8000 (a veces, una aplicación anterior que quedó abierta). Cerrá la ventana negra que hayas dejado abierta y volvé a intentar |
-| **El navegador abre pero la página está en blanco** | Esperá unos segundos y recargá (`F5`). Si sigue, arrancá de nuevo con `arrancar.bat` |
-| **La instalación se corta por la mitad** | Casi siempre es internet. Volvé a ejecutar `instalar.bat`: retoma lo que ya había bajado |
-| **Quiero empezar de cero** | Borrá `backend\riguel.db` y ejecutá `instalar.bat` otra vez |
+| **Windows avisa que "protegió tu PC"** | *Más información* → *Ejecutar de todas formas*. Explicado arriba |
+| **Dice `Failed to load Python DLL`** | Sacaste `Riguel.exe` de su carpeta. Volvelo a poner junto a la carpeta `_internal` |
+| **Dice que el puerto 8000 está ocupado** | Ya hay otra copia abierta o algún programa usando ese puerto. Cerrá la otra ventana negra y volvé a intentar |
+| **El navegador abre pero la página está en blanco** | Esperá unos segundos y recargá (`F5`). Si sigue, cerrá la ventana negra y abrí de nuevo |
+| **La ventana negra se cierra al instante** | Sacale una foto al texto que llegó a mostrar: ahí está el motivo |
+| **Quiero empezar de cero** | Con la aplicación cerrada, borrá `data\riguel.db` y volvé a abrirla |
+| **Quiero guardar una copia de todo** | Copiá `data\riguel.db` y `data\imagenes\` a un pendrive. Ver *Dónde están tus datos* |
 
 Si nada de esto lo resuelve, pasale a quien te dio el programa **el texto completo de la ventana
 negra**. Ahí está el motivo.
@@ -119,30 +129,17 @@ negra**. Ahí está el motivo.
 
 ## Para varios equipos de la red (opcional)
 
-Por defecto la aplicación solo es accesible **desde tu propia computadora**. Para que otras personas
-de la red entren desde sus máquinas, hay que escuchar en toda la red.
+El ejecutable escucha **solo en tu computadora**: nadie de la red puede entrar, ni siquiera para mirar.
+Es a propósito, para que tus observaciones no queden a la vista de cualquiera en una red compartida o
+pública.
 
-Editá `arrancar.bat` con el Bloc de notas y cambiá esta línea:
-
-```bat
-"..\.venv\Scripts\python.exe" -m uvicorn app.main:app --host 127.0.0.1 --port 8000
-```
-
-por:
-
-```bat
-"..\.venv\Scripts\python.exe" -m uvicorn app.main:app --host 0.0.0.0 --port 8000
-```
-
-Después los demás entran con `http://TU-IP-LOCAL:8000` (por ejemplo `http://192.168.1.50:8000`).
-Vas a tener que permitir el paso en el Firewall de Windows la primera vez.
-
-> ⚠️ Al hacer esto, la aplicación **queda sin contraseña** para cualquiera que esté en la misma red.
-> No lo hagas en una red pública o compartida.
+Si el grupo necesita que varias personas entren desde sus propias máquinas, eso se puede hacer con la
+**otra forma de distribución** (la que se instala con `instalar.bat`), que lo permite si lo pedís a
+propósito. Pedile a quien te dio el programa esa versión.
 
 ---
 
 ## Documentación técnica
 
-Si necesitás modificar el código, compilar el frontend o correr los tests, mirá
-[`DESARROLLO.md`](DESARROLLO.md).
+Si necesitás modificar el código, compilar el frontend, construir el ejecutable o correr los tests,
+mirá [`DESARROLLO.md`](DESARROLLO.md).

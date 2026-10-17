@@ -5,7 +5,7 @@ Documentación para **quien va a modificar el código**. Si solo querés *usar* 
 
 - [1. Entorno](#1-entorno)
 - [2. Puesta en marcha](#2-puesta-en-marcha)
-- [3. Los dos modos de ejecución](#3-los-dos-modos-de-ejecución)
+- [3. Los modos de ejecución](#3-los-modos-de-ejecución)
 - [4. Tests](#4-tests)
 - [5. Empaquetar para distribuir](#5-empaquetar-para-distribuir)
 - [6. Problemas conocidos](#6-problemas-conocidos)
@@ -81,7 +81,7 @@ npm install
 
 ---
 
-## 3. Los dos modos de ejecución
+## 3. Los modos de ejecución
 
 ### Desarrollo (dos servidores)
 
@@ -117,11 +117,24 @@ fallback mientras lo registres antes. Si agregás un prefijo reservado nuevo, su
 > anterior: el backend sirve lo que haya compilado en disco. En desarrollo usá `:5173`, o volvé a
 > correr `npm run build`.
 
+### El lanzador (como el ejecutable, pero desde el código)
+
+```bash
+cd backend
+python -m app.core.launcher
+```
+
+Es el **mismo punto de entrada que usa el `.exe`**, así que sirve para probar los caminos del modo
+congelado sin construir nada: fija las variables de entorno, prepara la carpeta de datos, corre las
+migraciones y recién ahí levanta el servidor y abre el navegador. Con `RIGUEL_SIN_NAVEGADOR=1` no abre
+nada, y con `RIGUEL_PUERTO=8399` escucha en otro puerto: eso es lo que usan las comprobaciones
+automáticas para no chocar con una aplicación que ya esté abierta.
+
 ---
 
 ## 4. Tests
 
-**Backend** (esperado: **27 pasan, 2 se saltean**):
+**Backend** (esperado: **58 pasan, 2 se saltean**):
 
 ```bash
 cd backend
@@ -160,14 +173,76 @@ habla con el navegador por CDP.
 
 ## 5. Empaquetar para distribuir
 
-`empaquetar.ps1` genera el ZIP que se entrega a quien va a instalar la aplicación:
+Hay **dos** artefactos y `empaquetar.ps1` produce los dos. Ninguno se entrega sin haberlo probado
+antes: que el build termine no alcanza.
+
+### 5.1 El ZIP con scripts (siempre)
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File empaquetar.ps1
 ```
 
-Qué hace: compila el frontend, arma un ZIP limpio y **lo prueba de verdad** en una carpeta nueva
-(ejecuta `instalar.bat`, verifica que el servidor responda y borra la carpeta de prueba).
+Compila el frontend, arma un ZIP limpio y **lo prueba de verdad** en una carpeta nueva: lo descomprime,
+corre `instalar.bat`, verifica que la aplicación levante y responda, y borra la carpeta de prueba. El
+resultado es `Riguel-Cuaderno-astronomico.zip`.
+
+Es el modo que necesita Python en la máquina de destino, y el único que permite escuchar en la red
+local (ver `INSTALL.md`).
+
+### 5.2 El ejecutable (opt-in)
+
+```powershell
+powershell -ExecutionPolicy Bypass -File empaquetar.ps1 -ConExe
+```
+
+Agrega, después de lo anterior, la construcción con PyInstaller y su propia verificación. Además del ZIP
+quedan `dist\Riguel\` y `Riguel-Cuaderno-astronomico-exe.zip`: la versión que **no necesita Python**.
+
+`-SoloEmpaquetar -ConExe` saltea la instalación completa y va derecho al ejecutable, que es lo cómodo
+mientras se lo está ajustando.
+
+PyInstaller viene en `requirements-dev.txt`, así que hace falta el `.venv` del proyecto. A diferencia de
+`pydantic-core`, publica ruedas independientes de la versión de Python: no se rompe en 3.13.
+
+Qué se arma (`riguel.spec`): una **carpeta**, no un archivo único. Un build de un-archivo se descomprime
+en un temporal en cada arranque, así que tarda más y le da a los antivirus bastante más de qué
+sospechar. Adentro van la interfaz compilada (`frontend/dist`), las migraciones (`backend/alembic`) y el
+logo por defecto, en la misma posición relativa que tienen en el repositorio, porque el código los busca
+con `paths.bundle_root()`.
+
+`alembic.ini` **no** se empaqueta: las migraciones se manejan desde el código, que arma la configuración
+de Alembic solo. Tampoco se usa compresión UPX, que es una de las causas clásicas de que Windows
+Defender marque un ejecutable recién hecho como sospechoso.
+
+### 5.3 Qué se prueba en el ejecutable
+
+Además de arrancarlo en una carpeta limpia, sin Python disponible, la verificación cubre lo que **solo**
+puede fallar una vez empaquetado:
+
+- que la interfaz compilada, las migraciones y el logo estén adentro del paquete;
+- que la base se cree **sembrada** por las migraciones (Riguel + los 6 filtros), y no vacía;
+- que se pueda crear una observación, exportar el PDF y el CSV, y subir un logo;
+- que todo eso **sobreviva a un reinicio**, que es lo que distingue una carpeta de datos de un temporal;
+- que adopte la base de una instalación anterior **por copia**, sin llevarse el archivo original;
+- que escuche **solo en loopback**.
+
+Si cualquiera falla, la corrida termina con código distinto de cero y no anuncia un paquete válido.
+
+### 5.4 Dónde vive el estado, desde el código y congelado
+
+| | Desde el código | Congelado |
+|---|---|---|
+| Base de datos | `backend/riguel.db` | `<carpeta del .exe>\data\riguel.db` |
+| Imágenes | `backend/data/imagenes/` | `<carpeta del .exe>\data\imagenes\` |
+
+Desde el código se conserva la disposición histórica **a propósito**, para no moverle la base a nadie.
+Quien decide es `backend/app/core/launcher.py`, que fija `DATABASE_URL`, `IMAGES_DIR`, `API_HOST` y
+`API_PORT` **antes** de importar `app.core.config`: los settings se construyen al importarse y leen el
+entorno una sola vez.
+
+Ese mismo lanzador es el punto de entrada del ejecutable, y también se puede correr desde el repo
+(`python -m app.core.launcher`, parado en `backend/`). Es la forma de probar los caminos del modo
+congelado sin construir nada.
 
 Queda fuera del paquete lo que es desarrollo o estado local: `node_modules`, `.venv`,
 `__pycache__`, `.pytest_cache`, `riguel.db` y las fotos que hayas subido a
@@ -188,7 +263,10 @@ Queda fuera del paquete lo que es desarrollo o estado local: `node_modules`, `.v
 | El frontend queda en **pantalla en blanco** y la consola del navegador dice `does not provide an export named ...` | El servidor de Vite quedó sirviendo una versión vieja de un módulo (file-watching poco fiable en Windows). La terminal de Vite se ve limpia y `npm run build` pasa igual | Reiniciá `npm run dev`: matá el árbol de procesos de npm/vite y levantalo de nuevo. Recargar el navegador **no** alcanza |
 | Cambiaste código del backend y **no se refleja**: `/health` responde, pero un endpoint nuevo da 404 | `uvicorn --reload` dejó un worker huérfano sirviendo código viejo | Matá **todos** los procesos `python run.py` y sus hijos (`multiprocessing-fork`), y arrancá de nuevo |
 | Abrís `:8000` y ves la **versión anterior de la interfaz** | `frontend/dist` quedó compilado de antes | Usá `:5173` en desarrollo, o corré `npm run build` |
-| Un `.bat` "salta" instrucciones o no respeta los `goto` | El archivo quedó guardado con saltos de línea **LF** en vez de **CRLF** | Volvé a guardarlo con CRLF (`(Get-Content x.bat) -join "\`r\`n"`) |
+| Un `.bat` "salta" instrucciones o no respeta los `goto` | El archivo quedó guardado con saltos de línea **LF** en vez de **CRLF** | Volvé a guardarlo con CRLF. Aplica a `.bat`, `.cmd` **y `.ps1`**: `.gitattributes` los clava en CRLF, y editarlos con una herramienta que escribe LF rompe la regla |
+| `Failed to load Python DLL ... _internal\python313.dll` al abrir el `.exe` | El ejecutable se separó de su carpeta `_internal` | No tiene arreglo desde el código: PyInstaller corta en el *bootloader*, antes de que corra una sola línea de Python, así que ningún manejador nuestro llega a ejecutarse. La única respuesta es copiar la carpeta `Riguel` completa, y por eso `INSTALL.md` lo avisa |
+| La verificación del ejecutable dice `Deberia haber 6 filtros y hay 1` | En PowerShell **5.1** `@(Invoke-RestMethod ...)` en una sola línea da 1: la llamada entrega el arreglo como **un solo objeto** en vez de enumerarlo. En PowerShell 7 lo enumera, así que el error solo aparece corriendo el script como se documenta (`powershell -File`), no a mano en `pwsh` | Asigná primero y envolvé después (`$x = Invoke-RestMethod ...; @($x).Count`), o usá un endpoint que devuelva un entero (`/count`). Ya está resuelto así en `empaquetar.ps1` |
+| Una comprobación automática no ve la aplicación recién levantada, pero el navegador la abre sin problema | `localhost` en Windows resuelve **primero a `::1`** (IPv6) y el servidor escucha solo en IPv4. `Invoke-WebRequest` se come el timeout del IPv6 antes de reintentar; el navegador hace *Happy Eyeballs* y no sufre eso | En las comprobaciones automáticas usá siempre `http://127.0.0.1:<puerto>`. La dirección que se le muestra a la persona —y la que abre el navegador— sigue siendo `http://localhost:<puerto>` |
 
 > Los tres síntomas de "no se actualiza" (Vite, uvicorn huérfano, `dist` viejo) son la misma clase de
 > problema: file-watching poco fiable en Windows. Si algo no refleja el código en disco,
@@ -201,23 +279,30 @@ Queda fuera del paquete lo que es desarrollo o estado local: `node_modules`, `.v
 
 ```
 observaciones/
-  instalar.bat            instalador de doble clic (usuario final)
+  instalar.bat            instalador de doble clic (usuario final, necesita Python)
   arrancar.bat            arranca la app y abre el navegador
-  empaquetar.ps1          genera el ZIP de distribución
+  abrir-navegador.ps1     espera a que el servidor responda y abre el navegador
+  empaquetar.ps1          genera el ZIP y, con -ConExe, el ejecutable
+  riguel.spec             receta de PyInstaller (carpeta, consola, sin UPX)
   run.py                  orquestador de desarrollo (dos servidores)
   backend/
     app/
       main.py             FastAPI + servicio del frontend compilado
       api/v1/             observatorio, filtros, observaciones, export
       core/config.py      settings (pydantic-settings)
+      core/launcher.py    punto de entrada del ejecutable
+      core/paths.py       donde esta cada cosa, congelado o desde el codigo
+      core/migrations.py  corre Alembic desde el codigo, sin alembic.ini
       services/pdf_generator.py
-    alembic/versions/     migraciones
-    requirements.txt      dependencias de ejecución
-    requirements-dev.txt  dependencias de desarrollo
+    alembic/versions/     migraciones (y la semilla)
+    data/imagenes/        imagenes y logo (desde el codigo)
     tests/
+    requirements.txt      dependencias de ejecucion
+    requirements-dev.txt  dependencias de desarrollo
   frontend/
     src/                  React + TypeScript + Vite + Tailwind
     e2e/                  test de navegador real (CDP)
     dist/                 compilado (generado, no versionado)
+  dist/                   ejecutable construido (generado, no versionado)
   openspec/               propuestas y artefactos del flujo SDD
 ```

@@ -1,10 +1,12 @@
-﻿<#
+<#
     empaquetar.ps1
     Genera el ZIP de distribucion de "Riguel - Cuaderno de Campo Astronomico".
 
     Uso:
         powershell -ExecutionPolicy Bypass -File empaquetar.ps1
         powershell -ExecutionPolicy Bypass -File empaquetar.ps1 -SoloEmpaquetar
+        powershell -ExecutionPolicy Bypass -File empaquetar.ps1 -ConExe
+        powershell -ExecutionPolicy Bypass -File empaquetar.ps1 -SoloEmpaquetar -ConExe
 
     Que hace:
       1. Compila el frontend (npm run build)
@@ -12,13 +14,23 @@
       3. Genera el ZIP
       4. Lo descomprime en una carpeta limpia, corre instalar.bat y comprueba
          que la aplicacion levante y responda. Si eso falla, el ZIP no sirve.
+      5. (solo con -ConExe) Construye el ejecutable con PyInstaller y lo prueba
+         entero: en una carpeta limpia, con una base de datos de por medio y
+         reiniciandolo, para comprobar que lo que guarda sobrevive.
 
-    El paso 4 es el importante: es la unica forma de detectar que una dependencia
-    falte o que algo se rompa solo al instalar desde cero.
+    Los pasos 4 y 5 son los importantes: son la unica forma de detectar que una
+    dependencia falte o que algo se rompa solo al instalar desde cero. El paso 5
+    comprueba ademas cosas que SOLO pueden fallar una vez empaquetado, como que la
+    interfaz compilada se encuentre adentro del paquete.
+
+    -SoloEmpaquetar saltea el paso 4. Combinado con -ConExe saltea la instalacion
+    completa y va derecho al ejecutable, que es lo comodo mientras se lo esta
+    ajustando.
 #>
 
 param(
-    [switch]$SoloEmpaquetar
+    [switch]$SoloEmpaquetar,
+    [switch]$ConExe
 )
 
 $ErrorActionPreference = 'Stop'
@@ -35,6 +47,16 @@ $prueba  = Join-Path $tmpBase 'prueba-desde-cero'
 
 $puerto = 8000
 
+# Cuantos pasos va a anunciar el script, para que la numeracion no mienta segun
+# los interruptores que se hayan usado. Sin ninguno son 4, como siempre.
+$pasos = 3
+if (-not $SoloEmpaquetar) { $pasos++ }
+if ($ConExe)              { $pasos++ }
+
+# Carpeta donde queda el ejecutable listo para repartir. Puede que se pise a si
+# misma entre corridas, asi que se limpia antes de construir.
+$distExe = Join-Path $raiz 'dist'
+
 function Escribir-Paso($texto) {
     Write-Host ''
     Write-Host "== $texto" -ForegroundColor Cyan
@@ -46,7 +68,7 @@ function Escribir-Aviso($texto){ Write-Host "   !    $texto" -ForegroundColor Ye
 # ---------------------------------------------------------------------------
 # 0. Comprobaciones previas
 # ---------------------------------------------------------------------------
-Escribir-Paso '0/4  Comprobando el entorno'
+Escribir-Paso "0/$pasos  Comprobando el entorno"
 
 if (-not (Get-Command npm -ErrorAction SilentlyContinue)) {
     throw 'No encontre npm. Para generar el paquete hace falta Node.js 20 o superior.'
@@ -67,7 +89,7 @@ Escribir-Ok "puerto $puerto libre"
 # ---------------------------------------------------------------------------
 # 1. Compilar el frontend
 # ---------------------------------------------------------------------------
-Escribir-Paso '1/4  Compilando el frontend'
+Escribir-Paso "1/$pasos  Compilando el frontend"
 
 Push-Location (Join-Path $raiz 'frontend')
 try {
@@ -84,7 +106,7 @@ Escribir-Ok 'frontend compilado en frontend/dist'
 # ---------------------------------------------------------------------------
 # 2. Armar la copia limpia
 # ---------------------------------------------------------------------------
-Escribir-Paso '2/4  Armando el paquete'
+Escribir-Paso "2/$pasos  Armando el paquete"
 
 if (Test-Path $tmpBase) { Remove-Item $tmpBase -Recurse -Force }
 New-Item -ItemType Directory -Path $stage -Force | Out-Null
@@ -109,7 +131,7 @@ Escribir-Ok 'copiado sin node_modules, .venv, base de datos ni fotos propias'
 # ---------------------------------------------------------------------------
 # 3. Generar el ZIP
 # ---------------------------------------------------------------------------
-Escribir-Paso '3/4  Generando el ZIP'
+Escribir-Paso "3/$pasos  Generando el ZIP"
 
 if (Test-Path $zipDestino) { Remove-Item $zipDestino -Force }
 
@@ -124,16 +146,18 @@ Add-Type -AssemblyName System.IO.Compression.FileSystem
 $mb = [math]::Round((Get-Item $zipDestino).Length / 1MB, 2)
 Escribir-Ok "$nombre.zip ($mb MB)"
 
-if ($SoloEmpaquetar) {
+if ($SoloEmpaquetar -and -not $ConExe) {
     Write-Host ''
     Write-Host 'Listo (sin verificar).' -ForegroundColor Green
     return
 }
 
 # ---------------------------------------------------------------------------
-# 4. Verificar en una carpeta limpia
+# 4. Verificar el ZIP en una carpeta limpia
 # ---------------------------------------------------------------------------
-Escribir-Paso '4/4  Probando el paquete desde cero'
+if (-not $SoloEmpaquetar) {
+
+Escribir-Paso "4/$pasos  Probando el paquete desde cero"
 
 Expand-Archive -Path $zipDestino -DestinationPath $prueba -Force
 $appDir = Join-Path $prueba $nombre
@@ -238,6 +262,307 @@ try {
 Remove-Item $prueba -Recurse -Force -ErrorAction SilentlyContinue
 Remove-Item $tmpBase -Recurse -Force -ErrorAction SilentlyContinue
 
+} else {
+    Escribir-Aviso 'salteando la verificacion del ZIP (-SoloEmpaquetar)'
+}
+
+# ---------------------------------------------------------------------------
+# 5. Construir y probar el ejecutable (-ConExe)
+# ---------------------------------------------------------------------------
+if ($ConExe) {
+
+$tmpExe     = Join-Path $env:TEMP 'riguel-exe'
+$workExe    = Join-Path $tmpExe 'build'
+$pruebaExe  = Join-Path $tmpExe 'prueba'
+$logExe     = Join-Path $tmpExe 'pyinstaller.log'
+$puertoExe  = 8412
+$python     = Join-Path $raiz '.venv\Scripts\python.exe'
+$espec      = Join-Path $raiz 'riguel.spec'
+$zipExe     = Join-Path $raiz "$nombre-exe.zip"
+
+# --- Construir -------------------------------------------------------------
+Escribir-Paso "5/$pasos  Construyendo el ejecutable"
+
+if (-not (Test-Path $espec))  { throw 'Falta riguel.spec en la raiz del proyecto.' }
+if (-not (Test-Path $python)) {
+    throw 'No encontre .venv. El ejecutable se construye con el entorno de desarrollo: corre instalar.bat primero.'
+}
+& $python -c 'import PyInstaller' *> $null
+if ($LASTEXITCODE -ne 0) {
+    throw 'PyInstaller no esta instalado en .venv. Corre: .venv\Scripts\python.exe -m pip install -r backend\requirements-dev.txt'
+}
+
+if (Test-Path $tmpExe) { Remove-Item $tmpExe -Recurse -Force }
+New-Item -ItemType Directory -Path $tmpExe -Force | Out-Null
+if (Test-Path $distExe) { Remove-Item $distExe -Recurse -Force }
+
+Write-Host '   ... corriendo PyInstaller (tarda un par de minutos)'
+# La salida se manda a un archivo con cmd para no tropezar con el ruido de stderr
+# que PowerShell 5.1 convierte en error cuando $ErrorActionPreference es Stop.
+$orden = '"{0}" -m PyInstaller "{1}" --noconfirm --distpath "{2}" --workpath "{3}" > "{4}" 2>&1' -f `
+    $python, $espec, $distExe, $workExe, $logExe
+cmd /c $orden | Out-Null
+if ($LASTEXITCODE -ne 0) {
+    if (Test-Path $logExe) { Get-Content $logExe -Tail 30 | ForEach-Object { Write-Host "      $_" } }
+    throw "PyInstaller fallo con codigo $LASTEXITCODE (log completo: $logExe)."
+}
+
+$appExe = Join-Path $distExe 'Riguel'
+if (-not (Test-Path (Join-Path $appExe 'Riguel.exe'))) { throw 'PyInstaller no genero Riguel.exe.' }
+$mbExe = [math]::Round(((Get-ChildItem $appExe -Recurse -File | Measure-Object -Property Length -Sum).Sum / 1MB), 1)
+Escribir-Ok "ejecutable construido en dist\Riguel ($mbExe MB)"
+
+# Lo que el codigo busca con bundle_root(). Si falta, la aplicacion igual arranca y
+# la persona ve una pagina en blanco: por eso se comprueba antes de ejecutarlo.
+foreach ($relativo in @(
+    '_internal\frontend\dist\index.html',
+    '_internal\backend\alembic\env.py',
+    '_internal\backend\alembic\versions\0001_initial.py',
+    '_internal\backend\data\imagenes\logo.jpg'
+)) {
+    if (-not (Test-Path (Join-Path $appExe $relativo))) {
+        throw "Al ejecutable le falta ${relativo}: la aplicacion no funcionaria."
+    }
+}
+Escribir-Ok 'trae adentro la interfaz compilada, las migraciones y el logo'
+
+# --- Probar -----------------------------------------------------------------
+Escribir-Paso "5/$pasos  Probando el ejecutable desde cero"
+
+New-Item -ItemType Directory -Path $pruebaExe -Force | Out-Null
+Copy-Item $appExe -Destination $pruebaExe -Recurse
+$copia     = Join-Path $pruebaExe 'Riguel'
+$exe       = Join-Path $copia 'Riguel.exe'
+$baseExe   = "http://127.0.0.1:$puertoExe"
+$publExe   = "http://localhost:$puertoExe"
+$env:RIGUEL_SIN_NAVEGADOR = '1'
+$env:RIGUEL_PUERTO        = "$puertoExe"
+
+function Iniciar-Exe($numero) {
+    $ruta = Join-Path $pruebaExe "exe-out-$numero.txt"
+    Start-Process -FilePath $exe -PassThru -NoNewWindow `
+        -RedirectStandardOutput $ruta `
+        -RedirectStandardError  (Join-Path $pruebaExe "exe-err-$numero.txt")
+}
+
+function Esperar-Exe {
+    for ($i = 0; $i -lt 240; $i++) {
+        try { $r = Invoke-WebRequest "$baseExe/health" -UseBasicParsing -TimeoutSec 3; if ($r.StatusCode -eq 200) { return $true } } catch { }
+        Start-Sleep -Milliseconds 500
+    }
+    return $false
+}
+
+function Detener-Exe($proceso) {
+    Get-NetTCPConnection -LocalPort $puertoExe -State Listen -ErrorAction SilentlyContinue |
+        ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }
+    if ($proceso) { Stop-Process -Id $proceso.Id -Force -ErrorAction SilentlyContinue }
+    for ($i = 0; $i -lt 20; $i++) {
+        if (-not (Get-NetTCPConnection -LocalPort $puertoExe -State Listen -ErrorAction SilentlyContinue)) { break }
+        Start-Sleep -Milliseconds 500
+    }
+}
+
+# Subida de archivos con HttpClient y no con -Form: -Form existe recien en
+# PowerShell 6, y este script tiene que andar tambien en el 5.1 de Windows.
+function Subir-Logo($url, $rutaArchivo) {
+    Add-Type -AssemblyName System.Net.Http -ErrorAction SilentlyContinue
+    $cliente = New-Object System.Net.Http.HttpClient
+    try {
+        $cuerpo = New-Object System.Net.Http.MultipartFormDataContent
+        $bytes  = [System.IO.File]::ReadAllBytes($rutaArchivo)
+        $parte  = New-Object System.Net.Http.ByteArrayContent -ArgumentList (, $bytes)
+        $parte.Headers.ContentType = [System.Net.Http.Headers.MediaTypeHeaderValue]::Parse('image/jpeg')
+        $cuerpo.Add($parte, 'file', [System.IO.Path]::GetFileName($rutaArchivo))
+        $respuesta = $cliente.PostAsync($url, $cuerpo).Result
+        return [pscustomobject]@{
+            Codigo = [int]$respuesta.StatusCode
+            Cuerpo = $respuesta.Content.ReadAsStringAsync().Result
+        }
+    } finally {
+        $cliente.Dispose()
+    }
+}
+
+function Poner-Nombre($texto) {
+    Invoke-RestMethod "$baseExe/api/v1/observatorio" -Method Put -TimeoutSec 20 `
+        -ContentType 'application/json' -Body (@{ nombre = $texto } | ConvertTo-Json) | Out-Null
+}
+
+$procExe = $null
+try {
+    # ---- Primer arranque, carpeta limpia ----------------------------------
+    $procExe = Iniciar-Exe 1
+    if (-not (Esperar-Exe)) {
+        $salida  = Get-Content (Join-Path $pruebaExe 'exe-out-1.txt') -ErrorAction SilentlyContinue
+        $errores = Get-Content (Join-Path $pruebaExe 'exe-err-1.txt') -ErrorAction SilentlyContinue
+        throw "El ejecutable no respondio en 120 segundos.`n--- salida ---`n$($salida -join "`n")`n--- errores ---`n$($errores -join "`n")"
+    }
+    Escribir-Ok 'arranco solo, sin Python instalado'
+
+    foreach ($ruta in @('/', '/admin/asociacion', '/observaciones/123', '/api/v1/observatorio', '/api/v1/filtros', '/imagenes/logo.jpg')) {
+        $r = Invoke-WebRequest "$baseExe$ruta" -UseBasicParsing -TimeoutSec 30
+        if ($r.StatusCode -ne 200) { throw "$ruta respondio $($r.StatusCode)." }
+    }
+    Escribir-Ok 'la interfaz, el enrutado del cliente y la API responden'
+
+    $r = Invoke-WebRequest $publExe -UseBasicParsing -TimeoutSec 30
+    if ($r.StatusCode -ne 200) { throw "http://localhost:$puertoExe respondio $($r.StatusCode)." }
+    Escribir-Ok "http://localhost:$puertoExe tambien responde"
+
+    $codigo = $null
+    try {
+        $respuesta = Invoke-WebRequest "$baseExe/api/v1/noexiste" -UseBasicParsing -TimeoutSec 20
+        $codigo = [int]$respuesta.StatusCode
+    } catch {
+        if ($_.Exception.Response) { $codigo = [int]$_.Exception.Response.StatusCode }
+    }
+    if ($codigo -ne 404) { throw "/api/v1/noexiste devolvio '$codigo' y deberia devolver 404." }
+    Escribir-Ok 'las rutas de API inexistentes siguen dando 404'
+
+    # Escucha SOLO en loopback. Con el default de los settings (0.0.0.0) el
+    # ejecutable quedaria a la vista de cualquiera en la misma red.
+    $direcciones = @(Get-NetTCPConnection -LocalPort $puertoExe -State Listen -ErrorAction SilentlyContinue |
+        Select-Object -ExpandProperty LocalAddress -Unique)
+    if ($direcciones -notcontains '127.0.0.1') {
+        throw "No escucha en 127.0.0.1 (escucha en: $($direcciones -join ', '))."
+    }
+    if ($direcciones -contains '0.0.0.0' -or $direcciones -contains '::') {
+        throw "Escucha en TODAS las interfaces ($($direcciones -join ', ')): las observaciones quedarian expuestas a la red local."
+    }
+    Escribir-Ok "escucha solo en loopback ($($direcciones -join ', '))"
+
+    # La semilla (observatorio + 6 filtros) vive en las migraciones, no en create_all:
+    # si el ejecutable usara create_all la base quedaria vacia y sin filtros.
+    $datos = Invoke-RestMethod "$baseExe/api/v1/observatorio" -TimeoutSec 20
+    if ($datos.nombre -ne 'Riguel') { throw "El observatorio deberia llamarse 'Riguel' y se llama '$($datos.nombre)'." }
+    if ($datos.logo_path -ne 'logo.jpg') { throw "El logo por defecto no es logo.jpg (es '$($datos.logo_path)')." }
+    # Los conteos van por los endpoints /count, que devuelven un entero.
+    # OJO: no sirve contar la lista con @(Invoke-RestMethod ...) en una sola linea.
+    # En PowerShell 5.1 esa llamada entrega el arreglo como UN objeto en vez de
+    # enumerarlo, asi que @() da 1 y la comprobacion falla mintiendo. En PowerShell 7
+    # funciona, o sea que el error solo aparece al correr el script como se documenta
+    # (powershell -File) y no a mano en pwsh.
+    $cantFiltros = Invoke-RestMethod "$baseExe/api/v1/filtros/count" -TimeoutSec 20
+    if ([int]$cantFiltros -ne 6) { throw "Deberia haber 6 filtros y hay $cantFiltros." }
+    # La lista completa igual se pide: es la que consume la interfaz, y traer 6
+    # elementos es distinto de que el endpoint /count diga 6.
+    $listaFiltros = Invoke-RestMethod "$baseExe/api/v1/filtros" -TimeoutSec 20
+    if (@($listaFiltros).Count -ne 6) {
+        throw "La lista de filtros trajo $(@($listaFiltros).Count) y deberian ser 6."
+    }
+    $cantObs = Invoke-RestMethod "$baseExe/api/v1/observaciones/count" -TimeoutSec 20
+    if ([int]$cantObs -ne 0) { throw "La base del ejecutable no esta vacia: trae $cantObs observacion(es)." }
+    Escribir-Ok 'base sembrada por las migraciones: Riguel, 6 filtros, ninguna observacion'
+
+    # Crear una observacion: hace falta para poder exportar, y de paso prueba el camino
+    # de ESCRITURA, que en un ejecutable es distinto del de lectura (permisos de la
+    # carpeta de datos, transacciones, la base que se creo recien).
+    $hoy = (Get-Date).ToString('yyyy-MM-dd')
+    $nueva = Invoke-RestMethod "$baseExe/api/v1/observaciones" -Method Post -TimeoutSec 30 `
+        -ContentType 'application/json' `
+        -Body (@{ objeto = 'Prueba de empaquetado'; fecha_hora_utc = "${hoy}T22:00:00"; fwhm = 2.5 } | ConvertTo-Json)
+    if (-not $nueva.id) { throw 'No se pudo crear una observacion.' }
+    $r = Invoke-WebRequest "$baseExe/api/v1/observaciones/$($nueva.id)" -UseBasicParsing -TimeoutSec 20
+    if ($r.StatusCode -ne 200) { throw "La observacion recien creada no se puede leer ($($r.StatusCode))." }
+    Escribir-Ok "se puede crear y leer una observacion (id $($nueva.id))"
+
+    # Exportar. El PDF es lo que arrastra reportlab, que trae fuentes y plantillas
+    # propias: es lo que mas facil se rompe al empaquetar, y no falla al arrancar sino
+    # justo cuando la persona aprieta el boton.
+    $pdf = Invoke-WebRequest "$baseExe/api/v1/export/pdf/noche?fecha=$hoy" -UseBasicParsing -TimeoutSec 60
+    if ($pdf.StatusCode -ne 200) { throw "La exportacion a PDF respondio $($pdf.StatusCode)." }
+    if ("$($pdf.Headers['Content-Type'])" -notmatch 'application/pdf') {
+        throw "La exportacion no devolvio un PDF (Content-Type: $($pdf.Headers['Content-Type']))."
+    }
+    if ($pdf.RawContentLength -lt 1000) { throw "El PDF salio demasiado chico ($($pdf.RawContentLength) bytes)." }
+    Escribir-Ok "el PDF se genera ($([math]::Round($pdf.RawContentLength/1KB)) KB)"
+
+    $csv = Invoke-WebRequest "$baseExe/api/v1/export/csv?tabla=all" -UseBasicParsing -TimeoutSec 60
+    if ($csv.StatusCode -ne 200) { throw "La exportacion a CSV respondio $($csv.StatusCode)." }
+    if ($csv.Content -notmatch 'Prueba de empaquetado') {
+        throw 'El CSV exportado no trae la observacion que se acaba de crear.'
+    }
+    Escribir-Ok 'el CSV se genera con lo que se cargo'
+
+    # Subir un logo propio: prueba que data\imagenes es escribible de verdad.
+    $logoPrueba = Join-Path $tmpExe 'logo-prueba.jpg'
+    Copy-Item (Join-Path $raiz 'backend\data\imagenes\logo.jpg') $logoPrueba
+    $subida = Subir-Logo "$baseExe/api/v1/observatorio/logo" $logoPrueba
+    if ($subida.Codigo -ne 200) { throw "Subir el logo respondio $($subida.Codigo): $($subida.Cuerpo)" }
+    $logoSubido = ($subida.Cuerpo | ConvertFrom-Json).logo_path
+    if (-not $logoSubido -or $logoSubido -eq 'logo.jpg') {
+        throw "El logo subido no se registro (logo_path = '$logoSubido')."
+    }
+    $r = Invoke-WebRequest "$baseExe/imagenes/$logoSubido" -UseBasicParsing -TimeoutSec 20
+    if ($r.StatusCode -ne 200) { throw "El logo subido no se sirve ($($r.StatusCode))." }
+    Escribir-Ok "el logo subido se guarda y se sirve ($logoSubido)"
+
+    # Reiniciar: lo que se guardo tiene que seguir ahi. Es lo que distingue una
+    # carpeta de datos de verdad de un temporal que se borra al cerrar.
+    $marca = "Riguel-prueba-$([guid]::NewGuid().ToString('N').Substring(0,8))"
+    Poner-Nombre $marca
+    Detener-Exe $procExe
+    $procExe = Iniciar-Exe 2
+    if (-not (Esperar-Exe)) { throw 'El ejecutable no volvio a arrancar.' }
+    $datos = Invoke-RestMethod "$baseExe/api/v1/observatorio" -TimeoutSec 20
+    if ($datos.nombre -ne $marca) { throw "El nombre no sobrevivio al reinicio: '$($datos.nombre)' en vez de '$marca'." }
+    if ($datos.logo_path -ne $logoSubido) { throw "El logo subido no sobrevivio al reinicio (es '$($datos.logo_path)')." }
+    $r = Invoke-WebRequest "$baseExe/imagenes/$logoSubido" -UseBasicParsing -TimeoutSec 20
+    if ($r.StatusCode -ne 200) { throw "El logo subido no se sirve despues del reinicio ($($r.StatusCode))." }
+    Escribir-Ok 'lo que guardo sobrevivio a un reinicio'
+
+    # Adopcion: simular una instalacion anterior dejando su base en backend\, que es
+    # donde la dejaria instalar.bat. El lanzador tiene que COPIARLA, no arrancar vacio.
+    Detener-Exe $procExe
+    $legacyDir = Join-Path $copia 'backend'
+    New-Item -ItemType Directory -Path $legacyDir -Force | Out-Null
+    Move-Item (Join-Path $copia 'data\riguel.db') (Join-Path $legacyDir 'riguel.db') -Force
+
+    $procExe = Iniciar-Exe 3
+    if (-not (Esperar-Exe)) { throw 'El ejecutable no arranco con una base anterior al lado.' }
+    $datos = Invoke-RestMethod "$baseExe/api/v1/observatorio" -TimeoutSec 20
+    if ($datos.nombre -ne $marca) {
+        throw "No adopto la base anterior: el observatorio se llama '$($datos.nombre)' y la base vieja decia '$marca'."
+    }
+    if (-not (Test-Path (Join-Path $legacyDir 'riguel.db'))) {
+        throw 'Se llevo la base anterior en vez de copiarla: el archivo original ya no esta.'
+    }
+    Escribir-Ok 'adopto la base de una instalacion anterior por copia, sin tocar el original'
+
+    # Con las dos bases presentes tiene que ganar la de data\, no la anterior.
+    $marcaNueva = "Riguel-nueva-$([guid]::NewGuid().ToString('N').Substring(0,8))"
+    Poner-Nombre $marcaNueva
+    Detener-Exe $procExe
+    $procExe = Iniciar-Exe 4
+    if (-not (Esperar-Exe)) { throw 'El ejecutable no arranco con las dos bases presentes.' }
+    $datos = Invoke-RestMethod "$baseExe/api/v1/observatorio" -TimeoutSec 20
+    if ($datos.nombre -ne $marcaNueva) {
+        throw "Piso la base en uso con la anterior: dice '$($datos.nombre)' y deberia decir '$marcaNueva'."
+    }
+    Escribir-Ok 'con las dos bases presentes gana la que esta en uso'
+
+} finally {
+    Detener-Exe $procExe
+    Remove-Item Env:\RIGUEL_SIN_NAVEGADOR -ErrorAction SilentlyContinue
+    Remove-Item Env:\RIGUEL_PUERTO -ErrorAction SilentlyContinue
+}
+
+# --- Generar el ZIP del ejecutable -----------------------------------------
+if (Test-Path $zipExe) { Remove-Item $zipExe -Force }
+[System.IO.Compression.ZipFile]::CreateFromDirectory(
+    $distExe,
+    $zipExe,
+    [System.IO.Compression.CompressionLevel]::Optimal,
+    $true
+)
+$mbZipExe = [math]::Round((Get-Item $zipExe).Length / 1MB, 2)
+Escribir-Ok "$nombre-exe.zip ($mbZipExe MB)"
+
+Remove-Item $tmpExe -Recurse -Force -ErrorAction SilentlyContinue
+
+}
+
 Write-Host ''
 Write-Host '============================================================' -ForegroundColor Green
 Write-Host '  PAQUETE LISTO Y VERIFICADO' -ForegroundColor Green
@@ -248,4 +573,11 @@ Write-Host "  Tamanio: $mb MB"
 Write-Host ''
 Write-Host '  Quien lo reciba: descomprimir, doble clic en instalar.bat,'
 Write-Host '  y despues doble clic en arrancar.bat.'
+if ($ConExe) {
+    Write-Host ''
+    Write-Host '  Ejecutable (no necesita Python ni instalar nada):' -ForegroundColor Green
+    Write-Host "    Carpeta: $appExe"
+    Write-Host "    Archivo: $zipExe"
+    Write-Host '  Quien lo reciba: descomprimir y doble clic en Riguel.exe.'
+}
 Write-Host ''
