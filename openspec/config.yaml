@@ -20,7 +20,8 @@ context: |
     (needs Python on the target machine), and the PyInstaller folder `Riguel/` (needs nothing).
     empaquetar.ps1 builds the zip and VERIFIES it from scratch in a temp folder; -ConExe adds the
     executable stage and verifies that too. Both are first-class tests, not builds.
-  Python: 3.12 or 3.13 only. 3.14 is NOT supported (pydantic-core 2.20.1 has no cp314 wheel).
+  Python: 3.12, 3.13 or 3.14. Older and newer versions are rejected on purpose: pydantic-core
+    (compiled) only publishes wheels for the versions instalar.bat accepts.
   Style: no linter, no formatter; mypy (backend) and tsc -b (frontend). Conventional commits
     straight to main, written in Spanish without accents. Prose docs in Spanish (voseo); structured
     SDD artifacts and code comments in English. .bat/.cmd/.ps1 MUST stay CRLF (LF breaks goto in

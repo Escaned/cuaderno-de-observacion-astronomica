@@ -20,19 +20,23 @@ set "PYVER="
 set "OTROVER="
 
 REM Se prueba de la version mas nueva soportada a la mas vieja, en ese orden:
-REM el lanzador "py" elige la ultima que encuentre, y si alguien tiene 3.14
-REM instalado "py -3" devuelve 3.14, que todavia no sirve.
-REM La 3.14 no sirve porque pydantic 2.8 trae pydantic-core 2.20.1, que esta
-REM escrito en Rust y solo publica ruedas hasta 3.13: en 3.14 pip intentaria
-REM compilarlo y la instalacion fallaria pidiendo Rust.
-for %%C in ("py -3.13" "py -3.12" "python" "py -3") do (
+REM el lanzador "py" elige la ultima que encuentre, y si alguien tiene 3.15
+REM instalado "py -3" devuelve 3.15, que todavia no sirve.
+REM
+REM Se aceptan 3.12, 3.13 y 3.14. Cualquier version fuera de ese rango se
+REM rechaza a proposito: si pip no encuentra rueda compilada para la version de
+REM Python, intenta compilar pydantic-core desde el codigo fuente y la
+REM instalacion falla pidiendo Rust (maturin / "Preparing metadata").
+REM Con lo que hay pinneado en backend\requirements.txt hay ruedas para esas
+REM tres versiones; si se mueve ese pin, hay que mover tambien este rango.
+for %%C in ("py -3.14" "py -3.13" "py -3.12" "python" "py -3") do (
     if not defined PYCMD (
         %%~C --version >nul 2>&1
         if not errorlevel 1 (
             set "VERDEESTE="
             for /f "delims=" %%v in ('%%~C --version 2^>nul') do set "VERDEESTE=%%v"
             if not defined OTROVER set "OTROVER=!VERDEESTE!"
-            %%~C -c "import sys; sys.exit(0 if (3,12) <= sys.version_info[:2] < (3,14) else 1)" >nul 2>&1
+            %%~C -c "import sys; sys.exit(0 if (3,12) <= sys.version_info[:2] < (3,15) else 1)" >nul 2>&1
             if not errorlevel 1 (
                 set "PYCMD=%%~C"
                 set "PYVER=!VERDEESTE!"
@@ -55,9 +59,9 @@ echo.
 echo [2/5] Preparando el entorno virtual (carpeta .venv)...
 
 REM Un .venv creado con otra version de Python no se puede reutilizar, y ademas
-REM es la causa de un fallo que confunde mucho: se instala Python 3.13, se vuelve
-REM a ejecutar instalar.bat y vuelve a fallar, porque el .venv viejo (hecho con
-REM 3.14, por ejemplo) se reutilizaba en silencio.
+REM es la causa de un fallo que confunde mucho: se instala otro Python, se vuelve
+REM a ejecutar instalar.bat y vuelve a fallar, porque el .venv viejo se reutilizaba
+REM en silencio.
 REM
 REM Las dos rutas van sin comillas a proposito: dentro de un "for /f" un comando
 REM que empieza con comilla doble se parsea distinto. Son relativas y sin espacios.
@@ -73,6 +77,16 @@ if exist ".venv\Scripts\python.exe" (
         echo       El entorno que habia es de Python !VENVVER! y ahora uso !ELEGIDOVER!.
         echo       Lo borro y lo creo de nuevo.
         rmdir /s /q ".venv"
+        if exist ".venv\Scripts\python.exe" (
+            echo.
+            echo   [ERROR] No pude borrar la carpeta .venv.
+            echo.
+            echo           Suele pasar cuando la aplicacion o una terminal la
+            echo           tienen abierta. Cerralo todo, borra la carpeta .venv
+            echo           a mano y volve a ejecutar instalar.bat.
+            echo.
+            goto :error
+        )
     )
 )
 
@@ -87,6 +101,23 @@ if exist ".venv\Scripts\python.exe" (
         goto :error
     )
     echo       Creado.
+)
+
+REM Verificacion de verdad, con el interprete que se va a usar: el .venv tiene
+REM que estar en el rango soportado. Ataja el caso de un .venv viejo que no se
+REM pudo borrar y deja el fallo en un mensaje claro, en vez de un error de pip
+REM pidiendo Rust a mitad de la instalacion de dependencias.
+".venv\Scripts\python.exe" -c "import sys; sys.exit(0 if (3,12) <= sys.version_info[:2] < (3,15) else 1)" >nul 2>&1
+if errorlevel 1 (
+    for /f "delims=" %%v in ('.venv\Scripts\python.exe -c "import sys;print(sys.version.split()[0])" 2^>nul') do set "VENVBADVER=%%v"
+    echo.
+    echo   [ERROR] La carpeta .venv quedo armada con Python !VENVBADVER!,
+    echo           que esta fuera del rango soportado: 3.12, 3.13 o 3.14.
+    echo.
+    echo           Borra la carpeta .venv que esta al lado de este archivo y
+    echo           volve a ejecutar instalar.bat.
+    echo.
+    goto :error
 )
 
 REM ---------------------------------------------------------------
@@ -107,12 +138,12 @@ if errorlevel 1 (
     echo.
     echo   [ERROR] No pude instalar las dependencias.
     echo.
-    echo           Puede ser que no tengas internet, o que tu Python no sea
-    echo           compatible: hace falta 3.12 o 3.13.
+    echo           Puede ser que no tengas internet. Tambien puede pasar si
+    echo           quedo un .venv viejo o roto en esta carpeta.
     echo.
     echo           Mira el texto de arriba. Si aparece "pyproject.toml",
-    echo           "maturin" o "Rust", es lo segundo: instala Python 3.13,
-    echo           borra la carpeta .venv y volve a ejecutar instalar.bat.
+    echo           "maturin" o "Rust", es lo segundo: borra la carpeta .venv
+    echo           y volve a ejecutar instalar.bat.
     echo.
     goto :error
 )
@@ -185,11 +216,11 @@ goto :error
 
 :python_malo
 echo.
-echo   [ERROR] Tu Python es !OTROVER! y la aplicacion todavia no funciona con esa version.
+echo   [ERROR] Tu Python es !OTROVER! y la aplicacion no funciona con esa version.
 echo.
-echo   Hace falta Python 3.12 o 3.13. La 3.14 todavia no esta soportada,
-echo   porque una de las dependencias se tendria que compilar y no viene lista
-echo   para esa version.
+echo   Hace falta Python 3.12, 3.13 o 3.14. Se aceptan solo esas: con otras
+echo   versiones algunas dependencias se tendrian que compilar desde el codigo
+echo   fuente y la instalacion falla.
 echo.
 echo   Instala la 3.13 y despues volve a ejecutar instalar.bat:
 echo       https://www.python.org/downloads/windows/

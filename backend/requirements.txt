@@ -2,8 +2,8 @@
 # Para desarrollo y tests, instala tambien requirements-dev.txt
 
 # FastAPI & ASGI
-fastapi==0.111.0
-uvicorn[standard]==0.30.1
+fastapi>=0.118.1,<0.119
+uvicorn[standard]>=0.34,<0.35
 
 # Base de datos
 # El extra [asyncio] NO es opcional: a partir de SQLAlchemy 2.1, greenlet dejo de
@@ -15,14 +15,17 @@ aiosqlite==0.19.0
 
 # Validacion y configuracion
 #
-# OJO con el tope <2.9 de pydantic. pydantic 2.8 arrastra pydantic-core 2.20.1, que
-# esta escrito en Rust y solo publica ruedas compiladas hasta Python 3.13. Con Python
-# 3.14 pip no encuentra rueda, intenta compilarlo y la instalacion falla pidiendo Rust
-# (maturin / "Preparing metadata (pyproject.toml)"). Por eso instalar.bat exige 3.12 o
-# 3.13. Para levantar este tope hay que subir pydantic-core (>= 2.35, o sea pydantic
-# >= 2.12) y fastapi (>= 0.118.1), y verificar toda la app: DESARROLLO.md, seccion 6.
-pydantic>=2.7,<2.9
-pydantic-settings>=2.3,<2.5
+# OJO con el tope <2.13 de pydantic. pydantic 2.12 es el primero que arrastra
+# pydantic-core >= 2.41, que ya publica ruedas compiladas para Python 3.14 (y
+# tambien para 3.12 y 3.13). Por eso instalar.bat acepta de 3.12 a 3.14.
+#
+# Con pydantic 2.8 (pydantic-core 2.20.1) en Python 3.14 pip no encontraba rueda,
+# intentaba compilarlo desde el codigo fuente y la instalacion fallaba pidiendo
+# Rust (maturin / "Preparing metadata (pyproject.toml)"). Si alguna vez hay que
+# volver a mover este pin, comprobar antes que pydantic-core publica rueda para
+# la version de Python mas nueva que acepte el instalador.
+pydantic>=2.12,<2.13
+pydantic-settings>=2.10,<3
 python-dotenv==1.0.1
 
 # Generacion de PDF

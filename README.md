@@ -11,7 +11,7 @@ servidores externos.
 
 ## Para usarla (sin tocar código)
 
-Solo necesitás **Windows con Python 3.12 o superior**: no hace falta Node.js.
+Solo necesitás **Windows con Python 3.12, 3.13 o 3.14**: no hace falta Node.js.
 
 1. Descomprimí el paquete
 2. Doble clic en **`instalar.bat`**
@@ -23,10 +23,10 @@ Guía completa, uso diario y solución de problemas: **[`INSTALL.md`](INSTALL.md
 
 ## Para desarrollar
 
-Python 3.12+, Node.js 20+ y npm 10+.
+Python 3.12, 3.13 o 3.14, Node.js 20+ y npm 10+.
 
 ```bash
-python -m venv .venv
+py -3.13 -m venv .venv
 .venv\Scripts\activate
 pip install -r backend/requirements.txt -r backend/requirements-dev.txt
 
@@ -44,7 +44,7 @@ Guía completa, tests, modo producción y problemas conocidos: **[`DESARROLLO.md
 
 | | |
 |---|---|
-| **Backend** | Python 3.12+, FastAPI, SQLAlchemy 2 (async), SQLite, Alembic |
+| **Backend** | Python 3.12–3.14, FastAPI, SQLAlchemy 2 (async), SQLite, Alembic |
 | **Frontend** | React 18, TypeScript, Vite, Tailwind CSS, TanStack Query |
 | **PDF / CSV** | ReportLab, csv + zipfile |
 | **Base de datos** | SQLite en un archivo (`backend/riguel.db`) |

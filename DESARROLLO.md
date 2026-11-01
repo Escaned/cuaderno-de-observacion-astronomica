@@ -16,7 +16,7 @@ Documentación para **quien va a modificar el código**. Si solo querés *usar* 
 
 | Herramienta | Versión | Verificar con |
 |---|---|---|
-| Python | 3.12 o 3.13 (**no 3.14**) | `py -3.13 --version` |
+| Python | 3.12, 3.13 o 3.14 | `py -3.13 --version` |
 | Node.js | 20+ | `node --version` |
 | npm | 10+ | `npm --version` |
 | Git | cualquiera | `git --version` |
@@ -41,9 +41,11 @@ El entorno virtual vive en la **raíz** del repo (no en `backend/`):
 py -3.13 -m venv .venv
 ```
 
-> ⚠️ **No uses `python` ni `py -3` a secas.** Si en tu equipo apuntan a Python 3.14, el `pip install`
-> de abajo falla intentando compilar `pydantic-core` desde el código fuente (que pide Rust). El motivo
-> completo está explicado en `backend/requirements.txt`, arriba del pin de `pydantic`.
+> ⚠️ **Cuidado con `python` y `py -3` a secas.** Eligen la versión más nueva del equipo, y hoy la
+> soportada llega hasta 3.14. Con una versión más nueva, el `pip install` de abajo falla intentando
+> compilar `pydantic-core` desde el código fuente (que pide Rust). El motivo completo está explicado
+> en `backend/requirements.txt`, arriba del pin de `pydantic`. `instalar.bat` acepta 3.12, 3.13 y 3.14
+> y rechaza el resto con un mensaje claro.
 
 | Sistema | Activar |
 |---|---|
@@ -255,7 +257,7 @@ Queda fuera del paquete lo que es desarrollo o estado local: `node_modules`, `.v
 | Síntoma | Causa | Solución |
 |---|---|---|
 | `RuntimeError: Directory './data/imagenes' does not exist` | Falta la carpeta de imágenes (solo en clones anteriores al fix del `.gitkeep`) | `mkdir data\imagenes` dentro de `backend/` (en Linux/macOS: `mkdir -p data/imagenes`) |
-| `Preparing metadata (pyproject.toml) ... error`, `maturin`, `Rust` al hacer `pip install` | `pydantic` 2.8 arrastra `pydantic-core` 2.20.1, que publica ruedas compiladas solo hasta Python 3.13. Con 3.14 pip no encuentra rueda e intenta compilarlo desde el código fuente | Usá Python 3.12 o 3.13 (`py -3.13 -m venv .venv`) y borrá el `.venv` viejo. Para soportar 3.14 de verdad hay que subir `pydantic` a >= 2.12 y `fastapi` a >= 0.118.1, y verificar toda la app |
+| `Preparing metadata (pyproject.toml) ... error`, `maturin`, `Rust` al hacer `pip install` | Hay una versión de Python sin rueda compilada de `pydantic-core` (por ejemplo la 3.15) o un `.venv` viejo que quedó armado con ella | Usá Python 3.12, 3.13 o 3.14 (`py -3.13 -m venv .venv`) y borrá el `.venv` viejo. Si el síntoma aparece con una versión dentro del rango, el `.venv` está roto: borralo y reinstalá |
 | `The SQLAlchemy asyncio module requires that the Python 'greenlet' library is installed` | Se instaló `sqlalchemy` en vez de `sqlalchemy[asyncio]` | `pip install "sqlalchemy[asyncio]>=2.0.31,<2.2"` |
 | `alembic: command not found` | El entorno virtual no está activado | Activá el venv (paso 2.1) |
 | El frontend no trae datos | El backend está apagado o el puerto 8000 está ocupado | Verificá http://localhost:8000/health |
