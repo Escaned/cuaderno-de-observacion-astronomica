@@ -65,6 +65,17 @@ function Escribir-Ok($texto)   { Write-Host "   OK   $texto" -ForegroundColor Gr
 function Escribir-Fallo($texto){ Write-Host "   FALLO  $texto" -ForegroundColor Red }
 function Escribir-Aviso($texto){ Write-Host "   !    $texto" -ForegroundColor Yellow }
 
+# Sockets que estan ESCUCHANDO en un puerto.
+#
+# No sirve filtrar con -State Listen: en algunas maquinas el proveedor CIM
+# devuelve el estado vacio y la consulta no encuentra nada, aunque haya un
+# servidor escuchando y los pedidos HTTP respondan. Un socket en escucha se
+# reconoce porque no tiene puerto remoto (RemotePort 0); los de cliente, si.
+function Get-Escuchando($p) {
+    @(Get-NetTCPConnection -LocalPort $p -ErrorAction SilentlyContinue |
+        Where-Object { $_.RemotePort -eq 0 })
+}
+
 # ---------------------------------------------------------------------------
 # 0. Comprobaciones previas
 # ---------------------------------------------------------------------------
@@ -80,7 +91,7 @@ if (-not (Test-Path (Join-Path $raiz 'instalar.bat')) -or -not (Test-Path (Join-
 }
 Escribir-Ok 'scripts de instalacion presentes'
 
-$ocupado = Get-NetTCPConnection -LocalPort $puerto -State Listen -ErrorAction SilentlyContinue
+$ocupado = Get-Escuchando $puerto
 if ($ocupado) {
     throw "El puerto $puerto esta ocupado. Cerra la aplicacion antes de empaquetar (la verificacion necesita ese puerto)."
 }
@@ -284,13 +295,16 @@ try {
     Escribir-Ok 'base de datos limpia y logo por defecto en su lugar'
 
 } finally {
-    Get-NetTCPConnection -LocalPort $puerto -State Listen -ErrorAction SilentlyContinue |
+    # Arrancar.bat deja a uvicorn como hijo de cmd.exe, asi que hay que matar el
+    # arbol entero: matar solo el cmd deja el servidor vivo, el ZIP de prueba no
+    # se puede borrar y la proxima corrida falla al limpiar el temporal.
+    Get-Escuchando $puerto |
         ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }
-    if ($proc) { Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue }
+    if ($proc) { & taskkill /PID $proc.Id /T /F 2>&1 | Out-Null }
     Remove-Item Env:\RIGUEL_SIN_NAVEGADOR -ErrorAction SilentlyContinue
     # Esperar a que el puerto quede libre de verdad antes de seguir.
     for ($i = 0; $i -lt 20; $i++) {
-        if (-not (Get-NetTCPConnection -LocalPort $puerto -State Listen -ErrorAction SilentlyContinue)) { break }
+        if (-not (Get-Escuchando $puerto)) { break }
         Start-Sleep -Milliseconds 500
     }
 }
@@ -390,11 +404,11 @@ function Esperar-Exe {
 }
 
 function Detener-Exe($proceso) {
-    Get-NetTCPConnection -LocalPort $puertoExe -State Listen -ErrorAction SilentlyContinue |
+    Get-Escuchando $puertoExe |
         ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }
     if ($proceso) { Stop-Process -Id $proceso.Id -Force -ErrorAction SilentlyContinue }
     for ($i = 0; $i -lt 20; $i++) {
-        if (-not (Get-NetTCPConnection -LocalPort $puertoExe -State Listen -ErrorAction SilentlyContinue)) { break }
+        if (-not (Get-Escuchando $puertoExe)) { break }
         Start-Sleep -Milliseconds 500
     }
 }
@@ -458,8 +472,19 @@ try {
 
     # Escucha SOLO en loopback. Con el default de los settings (0.0.0.0) el
     # ejecutable quedaria a la vista de cualquiera en la misma red.
-    $direcciones = @(Get-NetTCPConnection -LocalPort $puertoExe -State Listen -ErrorAction SilentlyContinue |
-        Select-Object -ExpandProperty LocalAddress -Unique)
+    #
+    # OJO: no sirve filtrar con -State Listen. En algunas maquinas el proveedor
+    # CIM devuelve el estado vacio para estos sockets y la consulta no encuentra
+    # nada, aunque la aplicacion este escuchando y los pedidos HTTP de arriba
+    # hayan respondido 200. Se filtra por el PID del ejecutable, que es mas
+    # preciso igual, y se reintenta por si la tabla tarda en reflejarlo.
+    $direcciones = @()
+    for ($intento = 0; $intento -lt 5 -and $direcciones.Count -eq 0; $intento++) {
+        Start-Sleep -Milliseconds 500
+        $direcciones = @(Get-NetTCPConnection -LocalPort $puertoExe -ErrorAction SilentlyContinue |
+            Where-Object { $_.OwningProcess -eq $procExe.Id } |
+            Select-Object -ExpandProperty LocalAddress -Unique)
+    }
     if ($direcciones -notcontains '127.0.0.1') {
         throw "No escucha en 127.0.0.1 (escucha en: $($direcciones -join ', '))."
     }
