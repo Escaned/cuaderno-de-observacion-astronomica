@@ -11,6 +11,7 @@ class Observacion(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     objeto = Column(String(100), nullable=False, index=True)
     fecha_hora_utc = Column(DateTime, nullable=False, index=True)
+    observatorio_id = Column(Integer, ForeignKey("observatorio.id", ondelete="SET NULL"), nullable=True)
     filtro_id = Column(Integer, ForeignKey("filtros.id"), nullable=True)
     fwhm = Column(Float, nullable=False)
     temperatura = Column(Float, nullable=True)
@@ -23,6 +24,7 @@ class Observacion(Base):
     actualizado_en = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     # Relationships
+    observatorio = relationship("Observatorio", back_populates="observaciones")
     filtro = relationship("Filtro", back_populates="observaciones")
     sesiones_captura = relationship("SesionCaptura", back_populates="observacion", cascade="all, delete-orphan")
 

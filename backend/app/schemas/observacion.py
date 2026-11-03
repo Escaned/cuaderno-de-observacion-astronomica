@@ -64,6 +64,7 @@ class SesionCapturaRead(SesionCapturaBase):
 class ObservacionBase(BaseModel):
     objeto: str
     fecha_hora_utc: datetime
+    observatorio_id: Optional[int] = None
     filtro_id: Optional[int] = None
     fwhm: float = Field(ge=0.5, le=10.0)
     temperatura: Optional[float] = None
@@ -81,6 +82,7 @@ class ObservacionCreate(ObservacionBase):
 class ObservacionUpdate(BaseModel):
     objeto: Optional[str] = None
     fecha_hora_utc: Optional[datetime] = None
+    observatorio_id: Optional[int] = None
     filtro_id: Optional[int] = None
     fwhm: Optional[float] = Field(default=None, ge=0.5, le=10.0)
     temperatura: Optional[float] = None
@@ -105,6 +107,7 @@ class ObservacionListItem(BaseModel):
     id: int
     objeto: str
     fecha_hora_utc: datetime
+    observatorio_id: Optional[int] = None
     filtro_id: Optional[int] = None
     fwhm: float
     creado_en: datetime

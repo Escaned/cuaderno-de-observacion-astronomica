@@ -14,21 +14,36 @@ if (typeof globalThis !== 'undefined') {
   Object.defineProperty(globalThis, 'localStorage', { value: mockLocalStorage });
 }
 
-const mockObservatorio = {
+const mockAsociacion = {
   id: 1,
   nombre: 'TBVG',
+  logo_path: 'logo.jpg',
+};
+
+const mockObservatorio = {
+  id: 1,
+  nombre: 'Riguel',
   latitud: 40.4168,
   longitud: -3.7038,
   altitud_msnm: 650,
   zona_horaria: 'Europe/Madrid',
-  logo_path: 'logo.jpg',
+  color: '#4d48e2',
+  es_predeterminado: true,
 };
 
-vi.mock('../hooks/useObservatorio', () => ({
-  useObservatorio: () => ({ data: mockObservatorio, isLoading: false }),
-  useUpdateObservatorio: () => ({ mutate: vi.fn(), isPending: false }),
+vi.mock('../hooks/useAsociacion', () => ({
+  useAsociacion: () => ({ data: mockAsociacion, isLoading: false }),
+  useUpdateAsociacion: () => ({ mutate: vi.fn(), isPending: false }),
   useUploadLogo: () => ({ mutate: vi.fn(), isPending: false }),
   useDeleteLogo: () => ({ mutate: vi.fn(), isPending: false }),
+}));
+
+vi.mock('../hooks/useObservatorios', () => ({
+  useObservatorios: () => ({ data: [mockObservatorio], isLoading: false }),
+  useCreateObservatorio: () => ({ mutate: vi.fn(), isPending: false }),
+  useUpdateObservatorio: () => ({ mutate: vi.fn(), isPending: false }),
+  useDeleteObservatorio: () => ({ mutate: vi.fn(), isPending: false }),
+  useSetObservatorioPredeterminado: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 
 function renderWithProviders(ui: React.ReactElement) {
@@ -66,5 +81,18 @@ describe('AdminAsociacion', () => {
     const fileInput = document.querySelector('input[type="file"]');
     expect(fileInput).toBeInTheDocument();
     expect(fileInput).toHaveAttribute('accept', 'image/jpeg,image/png');
+  });
+
+  it('lists the observatories with their coordinates and altitude', () => {
+    renderWithProviders(<AdminAsociacion />);
+    expect(screen.getByText('Riguel')).toBeInTheDocument();
+    expect(screen.getByText(/40\.4168°, -3\.7038°/)).toBeInTheDocument();
+    expect(screen.getByText(/650 m s\. n\. m\./)).toBeInTheDocument();
+    expect(screen.getByText('Predeterminado')).toBeInTheDocument();
+  });
+
+  it('offers a button to add another observatory', () => {
+    renderWithProviders(<AdminAsociacion />);
+    expect(screen.getByRole('button', { name: /Agregar observatorio/i })).toBeInTheDocument();
   });
 });

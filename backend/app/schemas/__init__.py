@@ -1,3 +1,9 @@
+from app.schemas.asociacion import (
+    AsociacionBase,
+    AsociacionUpdate,
+    AsociacionRead,
+)
+
 from app.schemas.observatorio import (
     ObservatorioBase,
     ObservatorioCreate,
@@ -51,6 +57,10 @@ from app.schemas.export import (
 )
 
 __all__ = [
+    # Asociacion
+    "AsociacionBase",
+    "AsociacionUpdate",
+    "AsociacionRead",
     # Observatorio
     "ObservatorioBase",
     "ObservatorioCreate",

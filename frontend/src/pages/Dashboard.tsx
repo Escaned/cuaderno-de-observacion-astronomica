@@ -1,32 +1,70 @@
 import { useObservations, useObservacionesStats } from '../hooks/useObservations';
-import { useObservatorio } from '../hooks/useObservatorio';
+import { useAsociacion } from '../hooks/useAsociacion';
+import { useObservatorios } from '../hooks/useObservatorios';
 import { formatUTCtoMadrid } from '../utils/date';
 import { formatFwhm, formatDuration } from '../utils/format';
 import { Loader } from '../components/ui/Loader';
 
+function formatearCoordenadas(observatorio: { latitud: number; longitud: number }): string {
+  return `${observatorio.latitud.toFixed(4)}°, ${observatorio.longitud.toFixed(4)}°`;
+}
+
 export function Dashboard() {
   const { data: observations, isLoading } = useObservations({ limit: 5 });
   const { data: stats } = useObservacionesStats();
-  const { data: observatorio } = useObservatorio();
+  const { data: asociacion } = useAsociacion();
+  const { data: observatorios } = useObservatorios();
 
   if (isLoading) return <Loader />;
 
   const totalObs = observations?.length ?? 0;
   const totalExposicion = stats?.total_exposicion_seg ?? 0;
+  const nombreAsociacion = asociacion?.nombre || 'Riguel';
 
   return (
     <div>
-      <h1 className="text-2xl font-bold mb-6">Grupo Astronómico Riquel Binaced - Valcarca</h1>
+      <h1 className="text-2xl font-bold mb-6">{nombreAsociacion}</h1>
 
-      {observatorio && (
-        <div className="card mb-6">
-          <h2 className="text-lg font-semibold mb-2">Observatorio</h2>
-          <p className="text-gray-600 dark:text-gray-400">
-            Galactica — {observatorio.latitud.toFixed(4)}°, {observatorio.longitud.toFixed(4)}°
-            {observatorio.altitud_msnm && ` — ${observatorio.altitud_msnm}m`}
+      <div className="card mb-6">
+        <h2 className="text-lg font-semibold mb-4">Observatorios</h2>
+        {observatorios && observatorios.length > 0 ? (
+          <ul className="space-y-3">
+            {observatorios.map(observatorio => (
+              <li
+                key={observatorio.id}
+                className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50 border-l-4"
+                style={{ borderLeftColor: observatorio.color }}
+              >
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium">{observatorio.nombre}</span>
+                    {observatorio.es_predeterminado && (
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-space-100 dark:bg-space-900 text-space-700 dark:text-space-300">
+                        Predeterminado
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    {formatearCoordenadas(observatorio)}
+                    {observatorio.altitud_msnm != null &&
+                      ` — ${Math.round(observatorio.altitud_msnm)} m s. n. m.`}
+                  </p>
+                </div>
+                <span
+                  className="inline-block w-4 h-4 rounded-full border border-black/10 self-start sm:self-center"
+                  style={{ backgroundColor: observatorio.color }}
+                  aria-hidden="true"
+                />
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-gray-500 dark:text-gray-400">
+            Todavía no hay observatorios. Agregalos en{' '}
+            <span className="font-medium">Asociación</span>.
           </p>
-        </div>
-      )}
+        )}
+      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         <div className="card text-center">

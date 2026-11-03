@@ -1,6 +1,8 @@
 import axios from 'axios';
 import type {
+  Asociacion,
   Observatorio,
+  ObservatorioCreate,
   Filtro,
   Observacion,
   ObservacionListItem,
@@ -12,21 +14,32 @@ const api = axios.create({
   headers: { 'Content-Type': 'application/json' },
 });
 
-// Observatorio
-export const getObservatorio = () => api.get<Observatorio>('/observatorio').then(r => r.data);
-export const updateObservatorio = (data: Partial<Observatorio>) =>
-  api.put<Observatorio>('/observatorio', data).then(r => r.data);
+// Asociacion
+export const getAsociacion = () => api.get<Asociacion>('/asociacion').then(r => r.data);
+export const updateAsociacion = (data: Partial<Asociacion>) =>
+  api.put<Asociacion>('/asociacion', data).then(r => r.data);
 export const uploadLogo = (file: File) => {
   const formData = new FormData();
   formData.append('file', file);
   return api
-    .post<Observatorio>('/observatorio/logo', formData, {
+    .post<Asociacion>('/asociacion/logo', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     })
     .then(r => r.data);
 };
 export const deleteLogo = () =>
-  api.delete<Observatorio>('/observatorio/logo').then(r => r.data);
+  api.delete<Asociacion>('/asociacion/logo').then(r => r.data);
+
+// Observatorios
+export const getObservatorios = () =>
+  api.get<Observatorio[]>('/observatorios').then(r => r.data);
+export const createObservatorio = (data: ObservatorioCreate) =>
+  api.post<Observatorio>('/observatorios', data).then(r => r.data);
+export const updateObservatorio = (id: number, data: Partial<ObservatorioCreate>) =>
+  api.put<Observatorio>(`/observatorios/${id}`, data).then(r => r.data);
+export const deleteObservatorio = (id: number) => api.delete(`/observatorios/${id}`);
+export const setObservatorioPredeterminado = (id: number) =>
+  api.post<Observatorio>(`/observatorios/${id}/predeterminado`).then(r => r.data);
 
 // Filtros
 export const getFiltros = (activoOnly = false) =>
@@ -46,6 +59,7 @@ export const getObservaciones = (params?: {
   skip?: number;
   limit?: number;
   filtro_id?: number;
+  observatorio_id?: number;
   fecha_desde?: string;
   fecha_hasta?: string;
   objeto?: string;

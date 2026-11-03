@@ -1,7 +1,9 @@
 import { useEffect } from 'react';
-import { NavLink, Outlet } from 'react-router-dom';
+import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useTheme } from '../hooks/useTheme';
-import { useObservatorio } from '../hooks/useObservatorio';
+import { useAsociacion } from '../hooks/useAsociacion';
+import { useObservatorioActivo } from '../hooks/useObservatorioActivo';
+import { hexToRgba } from '../utils/color';
 
 const navItems = [
   { to: '/', label: 'Dashboard', icon: '📊' },
@@ -13,10 +15,15 @@ const navItems = [
 
 export function Layout() {
   const { isDark, toggle } = useTheme();
-  const { data: observatorio } = useObservatorio();
+  const { data: asociacion } = useAsociacion();
+  const { activo } = useObservatorioActivo();
+  const location = useLocation();
 
-  const logoSrc = observatorio?.logo_path ? `/imagenes/${observatorio.logo_path}` : null;
-  const nombre = observatorio?.nombre || 'Riguel';
+  const logoSrc = asociacion?.logo_path ? `/imagenes/${asociacion.logo_path}` : null;
+  const nombre = asociacion?.nombre || 'Riguel';
+
+  const enObservaciones = location.pathname.startsWith('/observaciones');
+  const tinte = enObservaciones && activo ? hexToRgba(activo.color, isDark ? 0.16 : 0.08) : undefined;
 
   // Keep the browser tab icon in sync with the association logo
   useEffect(() => {
@@ -43,6 +50,16 @@ export function Layout() {
             />
           )}
           <h1 className="text-lg font-bold text-space-600 dark:text-space-400 leading-tight">{nombre}</h1>
+          {enObservaciones && activo && (
+            <p className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
+              <span
+                className="inline-block w-2.5 h-2.5 rounded-full"
+                style={{ backgroundColor: activo.color }}
+                aria-hidden="true"
+              />
+              {activo.nombre}
+            </p>
+          )}
         </div>
         <nav className="flex-1 space-y-1">
           {navItems.map(item => (
@@ -69,7 +86,10 @@ export function Layout() {
           {isDark ? '☀️ Claro' : '🌙 Oscuro'}
         </button>
       </aside>
-      <main className="flex-1 p-6 overflow-y-auto">
+      <main
+        className="flex-1 p-6 overflow-y-auto transition-colors duration-300"
+        style={{ backgroundColor: tinte }}
+      >
         <Outlet />
       </main>
     </div>

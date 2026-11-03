@@ -12,7 +12,7 @@ import os
 
 from app.main import app
 from app.core.database import Base, get_session
-from app.models import Observatorio, Filtro, Observacion, SesionCaptura, Calibracion
+from app.models import Asociacion, Observatorio, Filtro, Observacion, SesionCaptura, Calibracion
 
 
 # Test database URL - file-based SQLite for shared access across connections
@@ -50,13 +50,23 @@ async def test_get_session() -> AsyncSession:
 async def test_init_db():
     async with test_engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-        # Seed observatorio
+        # Seed asociacion
         await conn.execute(
-            Observatorio.__table__.insert().values(
-                id=1, nombre="Riguel", latitud=40.4168, longitud=-3.7038,
-                altitud_msnm=650.0, zona_horaria="Europe/Madrid"
+            Asociacion.__table__.insert().values(
+                id=1, nombre="Riguel", logo_path="logo.jpg"
             ).prefix_with("OR IGNORE")
         )
+        # Seed observatorio predeterminado solo si la tabla esta vacia: otros
+        # tests pueden haber cambiado cual es el predeterminado.
+        cantidad = (await conn.exec_driver_sql("SELECT COUNT(*) FROM observatorio")).scalar_one()
+        if cantidad == 0:
+            await conn.execute(
+                Observatorio.__table__.insert().values(
+                    id=1, nombre="Riguel", latitud=40.4168, longitud=-3.7038,
+                    altitud_msnm=650.0, zona_horaria="Europe/Madrid",
+                    color="#4d48e2", es_predeterminado=1,
+                )
+            )
         # Seed filtros
         await conn.execute(
             Filtro.__table__.insert().values(
@@ -95,7 +105,7 @@ async def client():
     """Create a test client with in-memory database."""
     from fastapi import FastAPI
     from fastapi.middleware.cors import CORSMiddleware
-    from app.api.v1 import observatorio, filtros, observaciones, export
+    from app.api.v1 import asociacion, observatorios, filtros, observaciones, export
     from contextlib import asynccontextmanager
 
     # Initialize database for this test
@@ -121,7 +131,8 @@ async def client():
         allow_headers=["*"],
     )
 
-    test_app.include_router(observatorio.router, prefix="/api/v1/observatorio", tags=["Observatorio"])
+    test_app.include_router(asociacion.router, prefix="/api/v1/asociacion", tags=["Asociacion"])
+    test_app.include_router(observatorios.router, prefix="/api/v1/observatorios", tags=["Observatorios"])
     test_app.include_router(filtros.router, prefix="/api/v1/filtros", tags=["Filtros"])
     test_app.include_router(observaciones.router, prefix="/api/v1/observaciones", tags=["Observaciones"])
     test_app.include_router(export.router, prefix="/api/v1/export", tags=["Export"])
@@ -150,9 +161,9 @@ def cleanup_test_db():
 
 
 @pytest.mark.asyncio
-async def test_observatorio_get_create(client):
-    """Test GET /api/v1/observatorio returns observatorio (auto-creates from settings)."""
-    resp = await client.get("/api/v1/observatorio")
+async def test_asociacion_get_create(client):
+    """Test GET /api/v1/asociacion returns the association (auto-creates from settings)."""
+    resp = await client.get("/api/v1/asociacion")
     assert resp.status_code == 200
     data = resp.json()
     assert "nombre" in data
@@ -160,14 +171,77 @@ async def test_observatorio_get_create(client):
 
 
 @pytest.mark.asyncio
-async def test_observatorio_update(client):
-    """Test PUT /api/v1/observatorio updates fields."""
+async def test_asociacion_update(client):
+    """Test PUT /api/v1/asociacion updates fields."""
     resp = await client.put(
-        "/api/v1/observatorio",
-        json={"altitud_msnm": 700.0},
+        "/api/v1/asociacion",
+        json={"nombre": "Asociacion de prueba"},
     )
     assert resp.status_code == 200
-    assert resp.json()["altitud_msnm"] == 700.0
+    assert resp.json()["nombre"] == "Asociacion de prueba"
+
+    # Restore the seeded name so later tests keep a predictable state
+    await client.put("/api/v1/asociacion", json={"nombre": "Riguel"})
+
+
+@pytest.mark.asyncio
+async def test_observatorios_crud_y_predeterminado(client):
+    """Create a second observatory, make it the default and list both."""
+    resp = await client.post(
+        "/api/v1/observatorios",
+        json={
+            "nombre": "Observatorio Norte",
+            "latitud": 42.1,
+            "longitud": -1.2,
+            "altitud_msnm": 850,
+            "color": "#0f766e",
+        },
+    )
+    assert resp.status_code == 201
+    nuevo_id = resp.json()["id"]
+    assert resp.json()["es_predeterminado"] is False
+
+    resp = await client.post(f"/api/v1/observatorios/{nuevo_id}/predeterminado")
+    assert resp.status_code == 200
+    assert resp.json()["es_predeterminado"] is True
+
+    resp = await client.get("/api/v1/observatorios")
+    assert resp.status_code == 200
+    observatorios = resp.json()
+    assert len(observatorios) >= 2
+    assert observatorios[0]["id"] == nuevo_id
+    assert sum(1 for o in observatorios if o["es_predeterminado"]) == 1
+
+    # The last observatory cannot be deleted
+    for observatorio in observatorios[1:]:
+        resp = await client.delete(f"/api/v1/observatorios/{observatorio['id']}")
+        assert resp.status_code == 204
+
+    resp = await client.delete(f"/api/v1/observatorios/{nuevo_id}")
+    assert resp.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_observaciones_se_asignan_al_predeterminado(client):
+    """An observation without observatorio_id lands on the default observatory."""
+    resp = await client.get("/api/v1/observatorios")
+    predeterminado = next(o for o in resp.json() if o["es_predeterminado"])
+
+    resp = await client.post(
+        "/api/v1/observaciones",
+        json={
+            "objeto": "M51",
+            "fecha_hora_utc": "2026-10-11T22:00:00Z",
+            "fwhm": 2.2,
+            "sesiones_captura": [],
+        },
+    )
+    assert resp.status_code == 201
+    assert resp.json()["observatorio_id"] == predeterminado["id"]
+
+    resp = await client.get(f"/api/v1/observaciones?observatorio_id={predeterminado['id']}")
+    assert resp.status_code == 200
+    assert any(o["objeto"] == "M51" for o in resp.json())
 
 
 # Minimal valid 1x1 PNG
@@ -184,7 +258,7 @@ async def test_observatorio_logo_upload(client, tmp_path, monkeypatch):
     monkeypatch.setattr(settings, "images_dir", str(tmp_path))
 
     resp = await client.post(
-        "/api/v1/observatorio/logo",
+        "/api/v1/asociacion/logo",
         files={"file": ("logo.png", _PNG_1X1, "image/png")},
     )
     assert resp.status_code == 200
@@ -202,7 +276,7 @@ async def test_observatorio_logo_rejects_non_image(client, tmp_path, monkeypatch
     monkeypatch.setattr(settings, "images_dir", str(tmp_path))
 
     resp = await client.post(
-        "/api/v1/observatorio/logo",
+        "/api/v1/asociacion/logo",
         files={"file": ("logo.png", b"this is definitely not a png", "image/png")},
     )
     assert resp.status_code == 400
@@ -217,7 +291,7 @@ async def test_observatorio_logo_rejects_bad_extension(client, tmp_path, monkeyp
     monkeypatch.setattr(settings, "images_dir", str(tmp_path))
 
     resp = await client.post(
-        "/api/v1/observatorio/logo",
+        "/api/v1/asociacion/logo",
         files={"file": ("logo.gif", b"GIF89a" + b"\x00" * 16, "image/gif")},
     )
     assert resp.status_code == 400
@@ -231,14 +305,14 @@ async def test_observatorio_logo_delete(client, tmp_path, monkeypatch):
     monkeypatch.setattr(settings, "images_dir", str(tmp_path))
 
     up = await client.post(
-        "/api/v1/observatorio/logo",
+        "/api/v1/asociacion/logo",
         files={"file": ("logo.png", _PNG_1X1, "image/png")},
     )
     assert up.status_code == 200
     uploaded = tmp_path / up.json()["logo_path"]
     assert uploaded.is_file()
 
-    resp = await client.delete("/api/v1/observatorio/logo")
+    resp = await client.delete("/api/v1/asociacion/logo")
     assert resp.status_code == 200
     assert resp.json()["logo_path"] is None
     assert not uploaded.exists()
@@ -252,7 +326,7 @@ async def test_night_pdf_embeds_logo(client, tmp_path, monkeypatch):
     monkeypatch.setattr(settings, "images_dir", str(tmp_path))
 
     up = await client.post(
-        "/api/v1/observatorio/logo",
+        "/api/v1/asociacion/logo",
         files={"file": ("logo.png", _PNG_1X1, "image/png")},
     )
     assert up.status_code == 200

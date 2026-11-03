@@ -29,6 +29,7 @@ def test_upgrade_to_head_creates_and_seeds_a_fresh_database(tmp_path):
     migrations.upgrade_to_head(_database_url(database))
 
     assert _query(database, "SELECT nombre FROM observatorio WHERE id = 1") == [("Riguel",)]
+    assert _query(database, "SELECT nombre FROM asociacion WHERE id = 1") == [("Riguel",)]
     assert [row[0] for row in _query(database, "SELECT nombre FROM filtros ORDER BY orden")] == [
         "L",
         "R",
@@ -47,9 +48,15 @@ def test_upgrade_to_head_applies_every_migration(tmp_path):
     observatorio_columns = {row[1] for row in _query(database, "PRAGMA table_info(observatorio)")}
     observacion_columns = {row[1] for row in _query(database, "PRAGMA table_info(observaciones)")}
 
-    # logo_path arrives in 0003 and fwhm in 0002, so a missing one means we stopped early.
-    assert "logo_path" in observatorio_columns
+    # logo_path arrives in 0003, fwhm in 0002 and the sites in 0004, so a missing
+    # one means we stopped early.
+    assert "color" in observatorio_columns
+    assert "es_predeterminado" in observatorio_columns
     assert "fwhm" in observacion_columns
+    assert "observatorio_id" in observacion_columns
+
+    # The first observatory is the default
+    assert _query(database, "SELECT es_predeterminado FROM observatorio WHERE id = 1") == [(1,)]
 
 
 def test_upgrade_to_head_does_not_duplicate_the_seed(tmp_path):
@@ -60,6 +67,7 @@ def test_upgrade_to_head_does_not_duplicate_the_seed(tmp_path):
 
     assert _query(database, "SELECT COUNT(*) FROM filtros") == [(6,)]
     assert _query(database, "SELECT COUNT(*) FROM observatorio") == [(1,)]
+    assert _query(database, "SELECT COUNT(*) FROM asociacion") == [(1,)]
 
 
 def test_upgrade_to_head_uses_the_url_it_is_given_not_the_configured_one(tmp_path, monkeypatch):

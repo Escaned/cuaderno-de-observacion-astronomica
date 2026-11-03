@@ -7,7 +7,7 @@ from sqlalchemy.pool import NullPool
 from sqlalchemy import inspect
 
 from app.core.database import Base
-from app.models import Observatorio, Filtro, Observacion, SesionCaptura, Calibracion
+from app.models import Asociacion, Observatorio, Filtro, Observacion, SesionCaptura, Calibracion
 
 
 @pytest_asyncio.fixture(scope="function")

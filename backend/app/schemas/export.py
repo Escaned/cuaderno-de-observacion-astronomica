@@ -10,7 +10,7 @@ class ExportFormat(str, Enum):
 
 
 class CSVExportRequest(BaseModel):
-    tabla: Literal["observaciones", "sesiones_captura", "calibracion", "filtros", "observatorio", "all"] = "all"
+    tabla: Literal["observaciones", "sesiones_captura", "calibracion", "filtros", "asociacion", "observatorios", "observatorio", "all"] = "all"
     fecha_desde: Optional[datetime] = None
     fecha_hasta: Optional[datetime] = None
     filtro_id: Optional[int] = None

@@ -71,8 +71,8 @@ cd backend
 alembic upgrade head
 ```
 
-Crea las tablas y carga los **datos semilla**: el observatorio *Riguel* y los 6 filtros estándar
-(L, R, G, B, Ha, OIII).
+Crea las tablas y carga los **datos semilla**: la asociación *Riguel*, un observatorio
+predeterminado *Riguel* y los 6 filtros estándar (L, R, G, B, Ha, OIII).
 
 ### 2.3 Frontend
 
@@ -291,7 +291,7 @@ observaciones/
   backend/
     app/
       main.py             FastAPI + servicio del frontend compilado
-      api/v1/             observatorio, filtros, observaciones, export
+      api/v1/             asociacion, observatorios, filtros, observaciones, export
       core/config.py      settings (pydantic-settings)
       core/launcher.py    punto de entrada del ejecutable
       core/paths.py       donde esta cada cosa, congelado o desde el codigo

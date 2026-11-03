@@ -14,6 +14,7 @@ async def get_observacion(db: AsyncSession, observacion_id: int) -> Observacion 
         .options(
             selectinload(Observacion.sesiones_captura).selectinload(SesionCaptura.calibraciones),
             selectinload(Observacion.filtro),
+            selectinload(Observacion.observatorio),
         )
         .where(Observacion.id == observacion_id)
     )
@@ -27,6 +28,7 @@ async def get_observaciones(
     skip: int = 0,
     limit: int = 100,
     filtro_id: Optional[int] = None,
+    observatorio_id: Optional[int] = None,
     fecha_desde: Optional[datetime] = None,
     fecha_hasta: Optional[datetime] = None,
     objeto: Optional[str] = None,
@@ -36,11 +38,14 @@ async def get_observaciones(
         .options(
             selectinload(Observacion.sesiones_captura).selectinload(SesionCaptura.calibraciones),
             selectinload(Observacion.filtro),
+            selectinload(Observacion.observatorio),
         )
         .order_by(Observacion.fecha_hora_utc.desc())
     )
     if filtro_id:
         query = query.where(Observacion.filtro_id == filtro_id)
+    if observatorio_id:
+        query = query.where(Observacion.observatorio_id == observatorio_id)
     if fecha_desde:
         query = query.where(Observacion.fecha_hora_utc >= fecha_desde)
     if fecha_hasta:
@@ -56,6 +61,7 @@ async def count_observaciones(
     db: AsyncSession,
     *,
     filtro_id: Optional[int] = None,
+    observatorio_id: Optional[int] = None,
     fecha_desde: Optional[datetime] = None,
     fecha_hasta: Optional[datetime] = None,
     objeto: Optional[str] = None,
@@ -63,6 +69,8 @@ async def count_observaciones(
     query = select(func.count(Observacion.id))
     if filtro_id:
         query = query.where(Observacion.filtro_id == filtro_id)
+    if observatorio_id:
+        query = query.where(Observacion.observatorio_id == observatorio_id)
     if fecha_desde:
         query = query.where(Observacion.fecha_hora_utc >= fecha_desde)
     if fecha_hasta:
@@ -74,8 +82,17 @@ async def count_observaciones(
 
 
 async def create_observacion(db: AsyncSession, obj_in: ObservacionCreate) -> Observacion:
+    from app.crud.observatorio import get_or_create_predeterminado
+
+    # Every observation belongs to an observatory. When the client does not send
+    # one (old clients, imports) it lands on the default observatory.
+    observatorio_id = obj_in.observatorio_id
+    if observatorio_id is None:
+        observatorio_id = (await get_or_create_predeterminado(db)).id
+
     # Create observacion
     obs_data = obj_in.model_dump(exclude={"sesiones_captura"})
+    obs_data["observatorio_id"] = observatorio_id
     db_obs = Observacion(**obs_data)
     db.add(db_obs)
     await db.flush()
@@ -99,8 +116,12 @@ async def create_observacion(db: AsyncSession, obj_in: ObservacionCreate) -> Obs
 async def update_observacion(
     db: AsyncSession, db_obs: Observacion, obj_in: ObservacionUpdate
 ) -> Observacion:
+    from app.crud.observatorio import get_or_create_predeterminado
+
     # Update observacion fields
     update_data = obj_in.model_dump(exclude={"sesiones_captura"}, exclude_unset=True)
+    if "observatorio_id" in update_data and update_data["observatorio_id"] is None:
+        update_data["observatorio_id"] = (await get_or_create_predeterminado(db)).id
     for field, value in update_data.items():
         setattr(db_obs, field, value)
 
@@ -141,6 +162,7 @@ async def duplicate_observacion(db: AsyncSession, observacion_id: int) -> Observ
     new_obs = Observacion(
         objeto=original.objeto,
         fecha_hora_utc=original.fecha_hora_utc,
+        observatorio_id=original.observatorio_id,
         filtro_id=original.filtro_id,
         fwhm=original.fwhm,
         temperatura=original.temperatura,

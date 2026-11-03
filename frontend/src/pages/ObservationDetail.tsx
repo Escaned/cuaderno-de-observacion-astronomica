@@ -1,5 +1,6 @@
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useObservacion, useDeleteObservacion } from '../hooks/useObservations';
+import { useObservatorioActivo } from '../hooks/useObservatorioActivo';
 import { useExportPDFNoche, useExportCSV } from '../hooks/useExport';
 import { formatUTCtoMadrid } from '../utils/date';
 import { formatFwhm, formatDuration, formatTemperature } from '../utils/format';
@@ -11,6 +12,7 @@ export function ObservationDetail() {
   const navigate = useNavigate();
   const { data: obs, isLoading } = useObservacion(id ? Number(id) : 0);
   const deleteMutation = useDeleteObservacion();
+  const { observatorios } = useObservatorioActivo();
   
   const exportPDFMutation = useExportPDFNoche();
   const exportCSVMutation = useExportCSV();
@@ -19,6 +21,7 @@ export function ObservationDetail() {
   if (!obs) return <div className="card">Observación no encontrada</div>;
 
   const totalExposure = obs.sesiones_captura.reduce((acc, s) => acc + (s.tiempo_exposicion_seg * s.num_subs), 0);
+  const observatorio = observatorios.find(o => o.id === obs.observatorio_id);
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
@@ -50,6 +53,19 @@ export function ObservationDetail() {
       <div className="card">
         <h2 className="text-lg font-semibold mb-4">Datos Generales</h2>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
+          <div>
+            <span className="text-gray-500 dark:text-gray-400">Observatorio</span>
+            <p className="flex items-center gap-2">
+              {observatorio && (
+                <span
+                  className="inline-block w-3 h-3 rounded-full border border-black/10"
+                  style={{ backgroundColor: observatorio.color }}
+                  aria-hidden="true"
+                />
+              )}
+              {observatorio?.nombre ?? '—'}
+            </p>
+          </div>
           <div>
             <span className="text-gray-500 dark:text-gray-400">FWHM</span>
             <p>{formatFwhm(obs.fwhm)}</p>

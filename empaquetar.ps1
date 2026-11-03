@@ -261,7 +261,7 @@ try {
     Escribir-Ok 'arrancar.bat levanto la aplicacion'
 
     # La interfaz, el enrutado del cliente y la API.
-    foreach ($ruta in @('/', '/admin/asociacion', '/observaciones/123', '/api/v1/observatorio', '/imagenes/logo.jpg')) {
+    foreach ($ruta in @('/', '/admin/asociacion', '/observaciones/123', '/api/v1/asociacion', '/api/v1/observatorios', '/imagenes/logo.jpg')) {
         $r = Invoke-WebRequest "$base$ruta" -UseBasicParsing -TimeoutSec 20
         if ($r.StatusCode -ne 200) { throw "$ruta respondio $($r.StatusCode)." }
     }
@@ -290,9 +290,11 @@ try {
     # Base de datos recien creada: sin observaciones y con el logo por defecto.
     $obs = Invoke-RestMethod "$base/api/v1/observaciones" -TimeoutSec 20
     if (@($obs).Count -ne 0) { throw "La base del paquete no esta vacia: trae $(@($obs).Count) observacion(es)." }
-    $datos = Invoke-RestMethod "$base/api/v1/observatorio" -TimeoutSec 20
+    $datos = Invoke-RestMethod "$base/api/v1/asociacion" -TimeoutSec 20
     if ($datos.logo_path -ne 'logo.jpg') { throw "El logo por defecto no es logo.jpg (es '$($datos.logo_path)')." }
-    Escribir-Ok 'base de datos limpia y logo por defecto en su lugar'
+    $sitios = Invoke-RestMethod "$base/api/v1/observatorios" -TimeoutSec 20
+    if (@($sitios).Count -ne 1) { throw "La base del paquete deberia traer 1 observatorio y trae $(@($sitios).Count)." }
+    Escribir-Ok 'base de datos limpia, un observatorio sembrado y logo por defecto en su lugar'
 
 } finally {
     # Arrancar.bat deja a uvicorn como hijo de cmd.exe, asi que hay que matar el
@@ -435,7 +437,7 @@ function Subir-Logo($url, $rutaArchivo) {
 }
 
 function Poner-Nombre($texto) {
-    Invoke-RestMethod "$baseExe/api/v1/observatorio" -Method Put -TimeoutSec 20 `
+    Invoke-RestMethod "$baseExe/api/v1/asociacion" -Method Put -TimeoutSec 20 `
         -ContentType 'application/json' -Body (@{ nombre = $texto } | ConvertTo-Json) | Out-Null
 }
 
@@ -450,7 +452,7 @@ try {
     }
     Escribir-Ok 'arranco solo, sin Python instalado'
 
-    foreach ($ruta in @('/', '/admin/asociacion', '/observaciones/123', '/api/v1/observatorio', '/api/v1/filtros', '/imagenes/logo.jpg')) {
+    foreach ($ruta in @('/', '/admin/asociacion', '/observaciones/123', '/api/v1/asociacion', '/api/v1/observatorios', '/api/v1/filtros', '/imagenes/logo.jpg')) {
         $r = Invoke-WebRequest "$baseExe$ruta" -UseBasicParsing -TimeoutSec 30
         if ($r.StatusCode -ne 200) { throw "$ruta respondio $($r.StatusCode)." }
     }
@@ -493,11 +495,15 @@ try {
     }
     Escribir-Ok "escucha solo en loopback ($($direcciones -join ', '))"
 
-    # La semilla (observatorio + 6 filtros) vive en las migraciones, no en create_all:
-    # si el ejecutable usara create_all la base quedaria vacia y sin filtros.
-    $datos = Invoke-RestMethod "$baseExe/api/v1/observatorio" -TimeoutSec 20
-    if ($datos.nombre -ne 'Riguel') { throw "El observatorio deberia llamarse 'Riguel' y se llama '$($datos.nombre)'." }
+    # La semilla (asociacion + observatorio + 6 filtros) vive en las migraciones, no en
+    # create_all: si el ejecutable usara create_all la base quedaria vacia y sin filtros.
+    $datos = Invoke-RestMethod "$baseExe/api/v1/asociacion" -TimeoutSec 20
+    if ($datos.nombre -ne 'Riguel') { throw "La asociacion deberia llamarse 'Riguel' y se llama '$($datos.nombre)'." }
     if ($datos.logo_path -ne 'logo.jpg') { throw "El logo por defecto no es logo.jpg (es '$($datos.logo_path)')." }
+    $sitios = Invoke-RestMethod "$baseExe/api/v1/observatorios" -TimeoutSec 20
+    if (@($sitios).Count -ne 1) { throw "Deberia haber 1 observatorio y hay $(@($sitios).Count)." }
+    if ($sitios[0].nombre -ne 'Riguel') { throw "El observatorio deberia llamarse 'Riguel' y se llama '$($sitios[0].nombre)'." }
+    if (-not $sitios[0].es_predeterminado) { throw 'El observatorio sembrado no quedo como predeterminado.' }
     # Los conteos van por los endpoints /count, que devuelven un entero.
     # OJO: no sirve contar la lista con @(Invoke-RestMethod ...) en una sola linea.
     # En PowerShell 5.1 esa llamada entrega el arreglo como UN objeto en vez de
@@ -514,7 +520,7 @@ try {
     }
     $cantObs = Invoke-RestMethod "$baseExe/api/v1/observaciones/count" -TimeoutSec 20
     if ([int]$cantObs -ne 0) { throw "La base del ejecutable no esta vacia: trae $cantObs observacion(es)." }
-    Escribir-Ok 'base sembrada por las migraciones: Riguel, 6 filtros, ninguna observacion'
+    Escribir-Ok 'base sembrada por las migraciones: Riguel, 1 observatorio, 6 filtros, ninguna observacion'
 
     # Crear una observacion: hace falta para poder exportar, y de paso prueba el camino
     # de ESCRITURA, que en un ejecutable es distinto del de lectura (permisos de la
@@ -549,7 +555,7 @@ try {
     # Subir un logo propio: prueba que data\imagenes es escribible de verdad.
     $logoPrueba = Join-Path $tmpExe 'logo-prueba.jpg'
     Copy-Item (Join-Path $raiz 'backend\data\imagenes\logo.jpg') $logoPrueba
-    $subida = Subir-Logo "$baseExe/api/v1/observatorio/logo" $logoPrueba
+    $subida = Subir-Logo "$baseExe/api/v1/asociacion/logo" $logoPrueba
     if ($subida.Codigo -ne 200) { throw "Subir el logo respondio $($subida.Codigo): $($subida.Cuerpo)" }
     $logoSubido = ($subida.Cuerpo | ConvertFrom-Json).logo_path
     if (-not $logoSubido -or $logoSubido -eq 'logo.jpg') {
@@ -566,8 +572,8 @@ try {
     Detener-Exe $procExe
     $procExe = Iniciar-Exe 2
     if (-not (Esperar-Exe)) { throw 'El ejecutable no volvio a arrancar.' }
-    $datos = Invoke-RestMethod "$baseExe/api/v1/observatorio" -TimeoutSec 20
-    if ($datos.nombre -ne $marca) { throw "El nombre no sobrevivio al reinicio: '$($datos.nombre)' en vez de '$marca'." }
+    $datos = Invoke-RestMethod "$baseExe/api/v1/asociacion" -TimeoutSec 20
+    if ($datos.nombre -ne $marca) { throw "El nombre de la asociacion no sobrevivio al reinicio: '$($datos.nombre)' en vez de '$marca'." }
     if ($datos.logo_path -ne $logoSubido) { throw "El logo subido no sobrevivio al reinicio (es '$($datos.logo_path)')." }
     $r = Invoke-WebRequest "$baseExe/imagenes/$logoSubido" -UseBasicParsing -TimeoutSec 20
     if ($r.StatusCode -ne 200) { throw "El logo subido no se sirve despues del reinicio ($($r.StatusCode))." }
@@ -582,9 +588,9 @@ try {
 
     $procExe = Iniciar-Exe 3
     if (-not (Esperar-Exe)) { throw 'El ejecutable no arranco con una base anterior al lado.' }
-    $datos = Invoke-RestMethod "$baseExe/api/v1/observatorio" -TimeoutSec 20
+    $datos = Invoke-RestMethod "$baseExe/api/v1/asociacion" -TimeoutSec 20
     if ($datos.nombre -ne $marca) {
-        throw "No adopto la base anterior: el observatorio se llama '$($datos.nombre)' y la base vieja decia '$marca'."
+        throw "No adopto la base anterior: la asociacion se llama '$($datos.nombre)' y la base vieja decia '$marca'."
     }
     if (-not (Test-Path (Join-Path $legacyDir 'riguel.db'))) {
         throw 'Se llevo la base anterior en vez de copiarla: el archivo original ya no esta.'
@@ -597,7 +603,7 @@ try {
     Detener-Exe $procExe
     $procExe = Iniciar-Exe 4
     if (-not (Esperar-Exe)) { throw 'El ejecutable no arranco con las dos bases presentes.' }
-    $datos = Invoke-RestMethod "$baseExe/api/v1/observatorio" -TimeoutSec 20
+    $datos = Invoke-RestMethod "$baseExe/api/v1/asociacion" -TimeoutSec 20
     if ($datos.nombre -ne $marcaNueva) {
         throw "Piso la base en uso con la anterior: dice '$($datos.nombre)' y deberia decir '$marcaNueva'."
     }

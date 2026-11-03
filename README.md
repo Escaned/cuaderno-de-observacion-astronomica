@@ -65,13 +65,15 @@ fallback a `index.html`, dejando intactas las rutas de `api/`, `imagenes/` y la 
 
 ## Funcionalidades
 
-- **Dashboard**: resumen, estadísticas y observaciones recientes
+- **Dashboard**: nombre de la asociación, observatorios con coordenadas y altitud, estadísticas y observaciones recientes
 - **Observaciones**: lista con búsqueda y filtros; alta con asistente de 3 pasos
-  (datos de la noche → sesiones de captura → calibraciones)
+  (datos de la noche → sesiones de captura → calibraciones). El observatorio activo se elige
+  arriba y tiñe la pantalla con su color para no cargar datos en el sitio equivocado
 - **Detalle**: vista completa con edición, duplicado y exportación
 - **Exportación**: CSV (tabla individual o ZIP con todas) y PDF (informe de noche o de campaña)
 - **Filtros**: catálogo administrable con reordenamiento arrastrando
-- **Asociación**: nombre del grupo y logo configurables, aplicados al menú, al favicon y a los PDF
+- **Asociación**: nombre del grupo y logo configurables, y varios observatorios con nombre,
+  coordenadas, altitud y color; uno queda como predeterminado
 - **Tema** claro/oscuro con persistencia
 
 ---
@@ -90,7 +92,7 @@ observaciones/
 ├── backend/
 │   ├── app/
 │   │   ├── main.py           FastAPI + servicio del frontend compilado
-│   │   ├── api/v1/           routers REST (observatorio, filtros, observaciones, export)
+│   │   ├── api/v1/           routers REST (asociacion, observatorios, filtros, observaciones, export)
 │   │   ├── core/             configuración, base de datos, seguridad
 │   │   ├── crud/             operaciones de datos
 │   │   ├── models/           modelos SQLAlchemy

@@ -144,15 +144,15 @@ function connect(wsUrl) {
 // app API (through the Vite proxy, so a single base URL is enough)
 // ---------------------------------------------------------------------------
 const api = {
-  get: () => fetchJson(`${BASE}/api/v1/observatorio`),
+  get: () => fetchJson(`${BASE}/api/v1/asociacion`),
   put: body =>
-    fetch(`${BASE}/api/v1/observatorio`, {
+    fetch(`${BASE}/api/v1/asociacion`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     }).then(r => r.json()),
   deleteLogo: () =>
-    fetch(`${BASE}/api/v1/observatorio/logo`, { method: 'DELETE' }).then(r => r.json()),
+    fetch(`${BASE}/api/v1/asociacion/logo`, { method: 'DELETE' }).then(r => r.json()),
 };
 
 // ---------------------------------------------------------------------------
@@ -178,7 +178,7 @@ async function main() {
   }
 
   try {
-    await fetchJson(`${BASE}/api/v1/observatorio`);
+    await fetchJson(`${BASE}/api/v1/asociacion`);
   } catch (err) {
     throw new Error(`no responde la app en ${BASE}. ¿Están levantados backend (:8000) y frontend (:5173)? (${err.message})`);
   }

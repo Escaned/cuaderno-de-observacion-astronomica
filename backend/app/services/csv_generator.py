@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models import Observacion, SesionCaptura, Calibracion, Filtro, Observatorio
+from app.models import Observacion, SesionCaptura, Calibracion, Filtro, Asociacion, Observatorio
 
 
 async def generate_csv_export(
@@ -22,7 +22,9 @@ async def generate_csv_export(
 
     if tabla == "all":
         # All tables combined into one CSV with section headers
-        await _write_observatorio(writer, db)
+        await _write_asociacion(writer, db)
+        writer.writerow([])
+        await _write_observatorios(writer, db)
         writer.writerow([])
         await _write_filtros(writer, db)
         writer.writerow([])
@@ -39,18 +41,36 @@ async def generate_csv_export(
         await _write_calibraciones(writer, db, fecha_desde, fecha_hasta, filtro_id)
     elif tabla == "filtros":
         await _write_filtros(writer, db)
-    elif tabla == "observatorio":
-        await _write_observatorio(writer, db)
+    elif tabla == "asociacion":
+        await _write_asociacion(writer, db)
+    elif tabla in ("observatorios", "observatorio"):
+        await _write_observatorios(writer, db)
 
     return output.getvalue().encode("utf-8")
 
 
-async def _write_observatorio(writer, db):
-    writer.writerow(["=== OBSERVATORIO ==="])
-    writer.writerow(["id", "nombre", "latitud", "longitud", "altitud_msnm", "zona_horaria"])
-    result = await db.execute(select(Observatorio))
+async def _write_asociacion(writer, db):
+    writer.writerow(["=== ASOCIACION ==="])
+    writer.writerow(["id", "nombre", "logo_path"])
+    result = await db.execute(select(Asociacion))
+    for asociacion in result.scalars().all():
+        writer.writerow([asociacion.id, asociacion.nombre, asociacion.logo_path])
+
+
+async def _write_observatorios(writer, db):
+    writer.writerow(["=== OBSERVATORIOS ==="])
+    writer.writerow([
+        "id", "nombre", "latitud", "longitud", "altitud_msnm",
+        "zona_horaria", "color", "es_predeterminado",
+    ])
+    result = await db.execute(
+        select(Observatorio).order_by(Observatorio.es_predeterminado.desc(), Observatorio.nombre)
+    )
     for obs in result.scalars().all():
-        writer.writerow([obs.id, obs.nombre, obs.latitud, obs.longitud, obs.altitud_msnm, obs.zona_horaria])
+        writer.writerow([
+            obs.id, obs.nombre, obs.latitud, obs.longitud, obs.altitud_msnm,
+            obs.zona_horaria, obs.color, obs.es_predeterminado,
+        ])
 
 
 async def _write_filtros(writer, db):
@@ -67,11 +87,16 @@ async def _write_filtros(writer, db):
 async def _write_observaciones(writer, db, fecha_desde, fecha_hasta, filtro_id):
     writer.writerow(["=== OBSERVACIONES ==="])
     writer.writerow([
-        "id", "objeto", "fecha_hora_utc", "filtro_id", "filtro_nombre",
+        "id", "objeto", "fecha_hora_utc", "observatorio_id", "observatorio_nombre",
+        "filtro_id", "filtro_nombre",
         "fwhm_arcsec", "temperatura", "humedad", "viento_kph", "direccion_viento",
         "descripcion", "imagenes", "creado_en", "actualizado_en"
     ])
-    query = select(Observacion).options(selectinload(Observacion.filtro)).order_by(Observacion.fecha_hora_utc.desc())
+    query = (
+        select(Observacion)
+        .options(selectinload(Observacion.filtro), selectinload(Observacion.observatorio))
+        .order_by(Observacion.fecha_hora_utc.desc())
+    )
     if fecha_desde:
         query = query.where(Observacion.fecha_hora_utc >= fecha_desde)
     if fecha_hasta:
@@ -81,8 +106,10 @@ async def _write_observaciones(writer, db, fecha_desde, fecha_hasta, filtro_id):
     result = await db.execute(query)
     for obs in result.scalars().all():
         writer.writerow([
-            obs.id, obs.objeto, obs.fecha_hora_utc.isoformat(), obs.filtro_id,
-            obs.filtro.nombre if obs.filtro else None, obs.fwhm, obs.temperatura,
+            obs.id, obs.objeto, obs.fecha_hora_utc.isoformat(),
+            obs.observatorio_id, obs.observatorio.nombre if obs.observatorio else None,
+            obs.filtro_id, obs.filtro.nombre if obs.filtro else None,
+            obs.fwhm, obs.temperatura,
             obs.humedad, obs.viento_kph, obs.direccion_viento, obs.descripcion,
             obs.imagenes, obs.creado_en.isoformat(), obs.actualizado_en.isoformat()
         ])

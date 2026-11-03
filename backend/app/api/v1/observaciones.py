@@ -32,6 +32,7 @@ async def get_observaciones_stats(db: AsyncSession = Depends(get_session)):
 @router.get("/count", response_model=int)
 async def count_observaciones_endpoint(
     filtro_id: Optional[int] = None,
+    observatorio_id: Optional[int] = None,
     fecha_desde: Optional[datetime] = None,
     fecha_hasta: Optional[datetime] = None,
     objeto: Optional[str] = None,
@@ -41,6 +42,7 @@ async def count_observaciones_endpoint(
     return await count_observaciones(
         db,
         filtro_id=filtro_id,
+        observatorio_id=observatorio_id,
         fecha_desde=fecha_desde,
         fecha_hasta=fecha_hasta,
         objeto=objeto,
@@ -52,6 +54,7 @@ async def read_observaciones(
     skip: int = 0,
     limit: int = 100,
     filtro_id: Optional[int] = None,
+    observatorio_id: Optional[int] = None,
     fecha_desde: Optional[datetime] = None,
     fecha_hasta: Optional[datetime] = None,
     objeto: Optional[str] = None,
@@ -63,6 +66,7 @@ async def read_observaciones(
         skip=skip,
         limit=limit,
         filtro_id=filtro_id,
+        observatorio_id=observatorio_id,
         fecha_desde=fecha_desde,
         fecha_hasta=fecha_hasta,
         objeto=objeto,

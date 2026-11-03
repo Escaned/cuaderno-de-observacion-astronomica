@@ -7,12 +7,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.core.database import get_session
 from app.crud import (
-    get_observatorio,
-    create_observatorio,
-    update_observatorio,
-    get_or_create_observatorio,
+    get_or_create_asociacion,
+    update_asociacion,
 )
-from app.schemas import ObservatorioCreate, ObservatorioUpdate, ObservatorioRead
+from app.schemas import AsociacionUpdate, AsociacionRead
 
 router = APIRouter()
 
@@ -51,24 +49,23 @@ def _remove_uploaded_logos(images_dir: Path) -> None:
             old.unlink(missing_ok=True)
 
 
-@router.get("", response_model=ObservatorioRead)
-async def read_observatorio(db: AsyncSession = Depends(get_session)):
-    """Get observatorio configuration."""
-    obs = await get_or_create_observatorio(db)
-    return obs
+@router.get("", response_model=AsociacionRead)
+async def read_asociacion(db: AsyncSession = Depends(get_session)):
+    """Get the association configuration (name and logo)."""
+    return await get_or_create_asociacion(db)
 
 
-@router.put("", response_model=ObservatorioRead)
-async def update_observatorio_endpoint(
-    obj_in: ObservatorioUpdate, db: AsyncSession = Depends(get_session)
+@router.put("", response_model=AsociacionRead)
+async def update_asociacion_endpoint(
+    obj_in: AsociacionUpdate, db: AsyncSession = Depends(get_session)
 ):
-    """Update observatorio configuration."""
-    obs = await get_or_create_observatorio(db)
-    return await update_observatorio(db, obs, obj_in)
+    """Update the association configuration."""
+    asociacion = await get_or_create_asociacion(db)
+    return await update_asociacion(db, asociacion, obj_in)
 
 
-@router.post("/logo", response_model=ObservatorioRead)
-async def upload_observatorio_logo(
+@router.post("/logo", response_model=AsociacionRead)
+async def upload_asociacion_logo(
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_session),
 ):
@@ -104,18 +101,18 @@ async def upload_observatorio_logo(
     filename = f"{_UPLOAD_PREFIX}{uuid4().hex[:12]}.{extension}"
     (images_dir / filename).write_bytes(content)
 
-    obs = await get_or_create_observatorio(db)
-    return await update_observatorio(db, obs, ObservatorioUpdate(logo_path=filename))
+    asociacion = await get_or_create_asociacion(db)
+    return await update_asociacion(db, asociacion, AsociacionUpdate(logo_path=filename))
 
 
-@router.delete("/logo", response_model=ObservatorioRead)
-async def delete_observatorio_logo(db: AsyncSession = Depends(get_session)):
+@router.delete("/logo", response_model=AsociacionRead)
+async def delete_asociacion_logo(db: AsyncSession = Depends(get_session)):
     """Remove the association logo, leaving the association without an image."""
-    obs = await get_or_create_observatorio(db)
+    asociacion = await get_or_create_asociacion(db)
 
-    if obs.logo_path and Path(obs.logo_path).name.startswith(_UPLOAD_PREFIX):
-        candidate = _images_dir() / Path(obs.logo_path).name
+    if asociacion.logo_path and Path(asociacion.logo_path).name.startswith(_UPLOAD_PREFIX):
+        candidate = _images_dir() / Path(asociacion.logo_path).name
         if candidate.is_file():
             candidate.unlink(missing_ok=True)
 
-    return await update_observatorio(db, obs, ObservatorioUpdate(logo_path=None))
+    return await update_asociacion(db, asociacion, AsociacionUpdate(logo_path=None))

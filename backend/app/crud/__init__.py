@@ -1,8 +1,19 @@
+from app.crud.asociacion import (
+    get_asociacion,
+    update_asociacion,
+    get_or_create_asociacion,
+)
+
 from app.crud.observatorio import (
     get_observatorio,
+    get_observatorios,
+    count_observatorios,
+    get_predeterminado,
+    get_or_create_predeterminado,
     create_observatorio,
     update_observatorio,
-    get_or_create_observatorio,
+    set_predeterminado,
+    delete_observatorio,
 )
 
 from app.crud.filtro import (
@@ -45,11 +56,20 @@ from app.crud.calibracion import (
 )
 
 __all__ = [
+    # Asociacion
+    "get_asociacion",
+    "update_asociacion",
+    "get_or_create_asociacion",
     # Observatorio
     "get_observatorio",
+    "get_observatorios",
+    "count_observatorios",
+    "get_predeterminado",
+    "get_or_create_predeterminado",
     "create_observatorio",
     "update_observatorio",
-    "get_or_create_observatorio",
+    "set_predeterminado",
+    "delete_observatorio",
     # Filtro
     "get_filtro",
     "get_filtro_by_nombre",

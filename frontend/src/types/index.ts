@@ -1,5 +1,11 @@
 export type TipoCalibracion = 'dark' | 'flat' | 'bias' | 'darkflat';
 
+export interface Asociacion {
+  id: number;
+  nombre: string;
+  logo_path: string | null;
+}
+
 export interface Observatorio {
   id: number;
   nombre: string;
@@ -7,7 +13,18 @@ export interface Observatorio {
   longitud: number;
   altitud_msnm: number | null;
   zona_horaria: string;
-  logo_path: string | null;
+  color: string;
+  es_predeterminado: boolean;
+}
+
+export interface ObservatorioCreate {
+  nombre: string;
+  latitud: number;
+  longitud: number;
+  altitud_msnm?: number | null;
+  zona_horaria?: string;
+  color?: string;
+  es_predeterminado?: boolean;
 }
 
 export interface Filtro {
@@ -45,6 +62,7 @@ export interface Observacion {
   id: number;
   objeto: string;
   fecha_hora_utc: string;
+  observatorio_id: number | null;
   filtro_id: number | null;
   fwhm: number;
   temperatura: number | null;
@@ -62,6 +80,7 @@ export interface ObservacionListItem {
   id: number;
   objeto: string;
   fecha_hora_utc: string;
+  observatorio_id: number | null;
   filtro_id: number | null;
   fwhm: number;
   creado_en: string;
@@ -70,6 +89,7 @@ export interface ObservacionListItem {
 export interface ObservacionCreate {
   objeto: string;
   fecha_hora_utc: string;
+  observatorio_id?: number | null;
   filtro_id?: number | null;
   fwhm: number;
   temperatura?: number | null;

@@ -21,6 +21,7 @@ export function useObservations(params?: {
   skip?: number;
   limit?: number;
   filtro_id?: number;
+  observatorio_id?: number;
   fecha_desde?: string;
   fecha_hasta?: string;
   objeto?: string;

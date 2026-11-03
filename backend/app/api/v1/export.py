@@ -13,14 +13,17 @@ router = APIRouter()
 
 @router.get("/csv")
 async def export_csv(
-    tabla: str = Query("all", description="Table to export: observaciones, sesiones_captura, calibracion, filtros, observatorio, or all"),
+    tabla: str = Query("all", description="Table to export: observaciones, sesiones_captura, calibracion, filtros, asociacion, observatorios, or all"),
     fecha_desde: Optional[datetime] = None,
     fecha_hasta: Optional[datetime] = None,
     filtro_id: Optional[int] = None,
     db: AsyncSession = Depends(get_session),
 ):
     """Export data as CSV. When tabla='all', combines all tables into a single CSV with section headers."""
-    if tabla not in ("observaciones", "sesiones_captura", "calibracion", "filtros", "observatorio", "all"):
+    if tabla not in (
+        "observaciones", "sesiones_captura", "calibracion", "filtros",
+        "asociacion", "observatorios", "observatorio", "all",
+    ):
         raise HTTPException(status_code=400, detail="Invalid table name")
 
     content = await generate_csv_export(db, tabla, fecha_desde, fecha_hasta, filtro_id)

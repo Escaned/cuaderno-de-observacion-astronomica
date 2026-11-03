@@ -2,20 +2,35 @@ import pytest
 from datetime import datetime, timezone
 from sqlalchemy import select
 
-from app.models import Observatorio, Filtro, Observacion, SesionCaptura, Calibracion, TipoCalibracion
+from app.models import Asociacion, Observatorio, Filtro, Observacion, SesionCaptura, Calibracion, TipoCalibracion
 
 
 @pytest.mark.asyncio
-async def test_observatorio_singleton(db_session):
-    obs = Observatorio(nombre="Test", latitud=1.0, longitud=2.0, altitud_msnm=100.0)
-    db_session.add(obs)
+async def test_asociacion_singleton(db_session):
+    asociacion = Asociacion(nombre="Test")
+    db_session.add(asociacion)
     await db_session.commit()
 
-    result = await db_session.execute(select(Observatorio))
+    result = await db_session.execute(select(Asociacion))
+    asociaciones = result.scalars().all()
+    assert len(asociaciones) == 1
+    assert asociaciones[0].nombre == "Test"
+    assert asociaciones[0].id == 1
+
+
+@pytest.mark.asyncio
+async def test_varios_observatorios(db_session):
+    primero = Observatorio(nombre="Norte", latitud=1.0, longitud=2.0, altitud_msnm=100.0, es_predeterminado=True)
+    segundo = Observatorio(nombre="Sur", latitud=-1.0, longitud=-2.0, altitud_msnm=200.0)
+    db_session.add_all([primero, segundo])
+    await db_session.commit()
+
+    result = await db_session.execute(select(Observatorio).order_by(Observatorio.id))
     observatorios = result.scalars().all()
-    assert len(observatorios) == 1
-    assert observatorios[0].nombre == "Test"
-    assert observatorios[0].id == 1
+    assert len(observatorios) == 2
+    assert observatorios[0].nombre == "Norte"
+    assert observatorios[0].es_predeterminado is True
+    assert observatorios[1].color == "#4d48e2"
 
 
 @pytest.mark.asyncio

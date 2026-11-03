@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models import Observacion, SesionCaptura, Calibracion, Filtro, Observatorio
+from app.models import Observacion, SesionCaptura, Calibracion, Filtro, Asociacion
 
 
 def _logo_flowable(logo_path: Optional[str], max_height_cm: float = 1.6):
@@ -42,6 +42,26 @@ def _logo_flowable(logo_path: Optional[str], max_height_cm: float = 1.6):
     return Image(str(path), width=height * (width_px / height_px), height=height)
 
 
+def _observatorios_label(observaciones) -> str:
+    """Name and coordinates of every observatory involved in a report."""
+    vistos = {}
+    for obs in observaciones:
+        observatorio = getattr(obs, "observatorio", None)
+        if observatorio is not None and observatorio.id not in vistos:
+            vistos[observatorio.id] = observatorio
+
+    if not vistos:
+        return "Sin observatorio"
+
+    partes = []
+    for observatorio in vistos.values():
+        detalle = f"{observatorio.latitud:.4f}, {observatorio.longitud:.4f}"
+        if observatorio.altitud_msnm is not None:
+            detalle += f", {observatorio.altitud_msnm:.0f} m"
+        partes.append(f"{observatorio.nombre} ({detalle})")
+    return "; ".join(partes)
+
+
 def _header_table(logo, title_flowables):
     """Logo on the left, title block on the right. Works when there is no logo."""
     from reportlab.lib.units import cm
@@ -68,6 +88,7 @@ async def generate_night_pdf(db: AsyncSession, fecha: datetime) -> bytes:
         select(Observacion)
         .options(
             selectinload(Observacion.filtro),
+            selectinload(Observacion.observatorio),
             selectinload(Observacion.sesiones_captura).selectinload(SesionCaptura.filtro),
             selectinload(Observacion.sesiones_captura).selectinload(SesionCaptura.calibraciones),
         )
@@ -80,10 +101,10 @@ async def generate_night_pdf(db: AsyncSession, fecha: datetime) -> bytes:
     if not observaciones:
         raise ValueError("No observations found for this date")
 
-    obs_result = await db.execute(select(Observatorio))
-    observatorio = obs_result.scalar_one_or_none()
+    asoc_result = await db.execute(select(Asociacion))
+    asociacion = asoc_result.scalar_one_or_none()
 
-    return _generate_night_pdf_reportlab(observaciones, observatorio, fecha)
+    return _generate_night_pdf_reportlab(observaciones, asociacion, fecha)
 
 
 async def generate_campaign_pdf(db: AsyncSession, fecha_desde: datetime, fecha_hasta: datetime) -> bytes:
@@ -92,6 +113,7 @@ async def generate_campaign_pdf(db: AsyncSession, fecha_desde: datetime, fecha_h
         select(Observacion)
         .options(
             selectinload(Observacion.filtro),
+            selectinload(Observacion.observatorio),
             selectinload(Observacion.sesiones_captura).selectinload(SesionCaptura.filtro),
             selectinload(Observacion.sesiones_captura).selectinload(SesionCaptura.calibraciones),
         )
@@ -104,13 +126,13 @@ async def generate_campaign_pdf(db: AsyncSession, fecha_desde: datetime, fecha_h
     if not observaciones:
         raise ValueError("No observations found for this date range")
 
-    obs_result = await db.execute(select(Observatorio))
-    observatorio = obs_result.scalar_one_or_none()
+    asoc_result = await db.execute(select(Asociacion))
+    asociacion = asoc_result.scalar_one_or_none()
 
-    return _generate_campaign_pdf_reportlab(observaciones, observatorio, fecha_desde, fecha_hasta)
+    return _generate_campaign_pdf_reportlab(observaciones, asociacion, fecha_desde, fecha_hasta)
 
 
-def _generate_night_pdf_reportlab(observaciones, observatorio, fecha) -> bytes:
+def _generate_night_pdf_reportlab(observaciones, asociacion, fecha) -> bytes:
     """Generate night PDF using ReportLab."""
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.units import cm
@@ -123,14 +145,14 @@ def _generate_night_pdf_reportlab(observaciones, observatorio, fecha) -> bytes:
     styles = getSampleStyleSheet()
     elements = []
 
-    obs_name = observatorio.nombre if observatorio else "Observatorio"
-    obs_location = f"{observatorio.latitud:.4f}, {observatorio.longitud:.4f}" if observatorio else ""
+    asoc_name = asociacion.nombre if asociacion else "Asociacion"
+    obs_location = _observatorios_label(observaciones)
 
     elements.append(_header_table(
-        _logo_flowable(observatorio.logo_path if observatorio else None),
+        _logo_flowable(asociacion.logo_path if asociacion else None),
         [
-            Paragraph(f"<b>Informe de Noche - {obs_name}</b>", styles["Title"]),
-            Paragraph(f"Fecha: {fecha.strftime('%d/%m/%Y')} | Ubicacion: {obs_location}", styles["Normal"]),
+            Paragraph(f"<b>Informe de Noche - {asoc_name}</b>", styles["Title"]),
+            Paragraph(f"Fecha: {fecha.strftime('%d/%m/%Y')} | Observatorio: {obs_location}", styles["Normal"]),
         ],
     ))
     elements.append(Spacer(1, 0.5*cm))
@@ -168,7 +190,7 @@ def _generate_night_pdf_reportlab(observaciones, observatorio, fecha) -> bytes:
     return buffer.getvalue()
 
 
-def _generate_campaign_pdf_reportlab(observaciones, observatorio, fecha_desde, fecha_hasta) -> bytes:
+def _generate_campaign_pdf_reportlab(observaciones, asociacion, fecha_desde, fecha_hasta) -> bytes:
     """Generate campaign PDF using ReportLab."""
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.units import cm
@@ -181,13 +203,14 @@ def _generate_campaign_pdf_reportlab(observaciones, observatorio, fecha_desde, f
     styles = getSampleStyleSheet()
     elements = []
 
-    obs_name = observatorio.nombre if observatorio else "Observatorio"
+    asoc_name = asociacion.nombre if asociacion else "Asociacion"
 
     elements.append(_header_table(
-        _logo_flowable(observatorio.logo_path if observatorio else None),
+        _logo_flowable(asociacion.logo_path if asociacion else None),
         [
-            Paragraph(f"<b>Informe de Campana - {obs_name}</b>", styles["Title"]),
+            Paragraph(f"<b>Informe de Campana - {asoc_name}</b>", styles["Title"]),
             Paragraph(f"Periodo: {fecha_desde.strftime('%d/%m/%Y')} - {fecha_hasta.strftime('%d/%m/%Y')}", styles["Normal"]),
+            Paragraph(f"Observatorios: {_observatorios_label(observaciones)}", styles["Normal"]),
         ],
     ))
     elements.append(Spacer(1, 0.5*cm))

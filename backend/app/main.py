@@ -8,7 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from app.core import paths
 from app.core.config import settings
 from app.core.database import init_db, close_db
-from app.api.v1 import observatorio, filtros, observaciones, export
+from app.api.v1 import asociacion, observatorios, filtros, observaciones, export
 
 # The built frontend (created by `npm run build`). When it exists the backend also
 # serves the web app, so a normal install needs a single server and no Node.js.
@@ -60,7 +60,8 @@ app.mount(
 )
 
 # Routers
-app.include_router(observatorio.router, prefix="/api/v1/observatorio", tags=["Observatorio"])
+app.include_router(asociacion.router, prefix="/api/v1/asociacion", tags=["Asociacion"])
+app.include_router(observatorios.router, prefix="/api/v1/observatorios", tags=["Observatorios"])
 app.include_router(filtros.router, prefix="/api/v1/filtros", tags=["Filtros"])
 app.include_router(observaciones.router, prefix="/api/v1/observaciones", tags=["Observaciones"])
 app.include_router(export.router, prefix="/api/v1/export", tags=["Export"])

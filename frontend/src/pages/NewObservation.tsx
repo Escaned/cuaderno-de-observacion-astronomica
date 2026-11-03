@@ -1,6 +1,9 @@
+import { useEffect } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useFilters } from '../hooks/useFilters';
 import { useCreateObservacion, useObservacion, useUpdateObservacion } from '../hooks/useObservations';
+import { useObservatorioActivo } from '../hooks/useObservatorioActivo';
+import { ObservatorioSelector } from '../components/ObservatorioSelector';
 import { WizardLayout } from '../components/wizard/WizardLayout';
 import { Loader } from '../components/ui/Loader';
 import type { ObservacionCreate } from '../types';
@@ -14,8 +17,17 @@ export function NewObservation() {
 
   const { data: filtros, isLoading: filtrosLoading } = useFilters(true);
   const { data: observacion, isLoading: obsLoading } = useObservacion(id ? Number(id) : 0);
+  const { activo, setActivoId } = useObservatorioActivo();
   const createMutation = useCreateObservacion();
   const updateMutation = useUpdateObservacion();
+
+  // Al editar, la pantalla muestra el observatorio al que pertenece la
+  // observacion (con su color), no el que estuviera seleccionado antes.
+  useEffect(() => {
+    if (editMode && observacion?.observatorio_id != null) {
+      setActivoId(observacion.observatorio_id);
+    }
+  }, [editMode, observacion?.observatorio_id, setActivoId]);
 
   if (filtrosLoading || (editMode && obsLoading)) return <Loader />;
 
@@ -49,14 +61,18 @@ export function NewObservation() {
       }
     : undefined;
 
+  const observatorioId =
+    (editMode ? observacion?.observatorio_id : undefined) ?? activo?.id ?? null;
+
   const handleSubmit = (data: ObservacionCreate) => {
+    const payload: ObservacionCreate = { ...data, observatorio_id: observatorioId };
     if (editMode && id) {
       updateMutation.mutate(
-        { id: Number(id), data },
+        { id: Number(id), data: payload },
         { onSuccess: () => navigate(`/observaciones/${id}`) }
       );
     } else {
-      createMutation.mutate(data, {
+      createMutation.mutate(payload, {
         onSuccess: newObs => navigate(`/observaciones/${newObs.id}`),
       });
     }
@@ -64,6 +80,8 @@ export function NewObservation() {
 
   return (
     <div>
+      <ObservatorioSelector />
+
       <h1 className="text-2xl font-bold mb-6">
         {editMode ? 'Editar Observación' : duplicate ? 'Duplicar Observación' : 'Nueva Observación'}
       </h1>

@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useObservations } from '../hooks/useObservations';
+import { useObservations, useDeleteObservacion } from '../hooks/useObservations';
 import { useFilters } from '../hooks/useFilters';
-import { useDeleteObservacion } from '../hooks/useObservations';
+import { useObservatorioActivo } from '../hooks/useObservatorioActivo';
+import { ObservatorioSelector } from '../components/ObservatorioSelector';
 import { formatUTCtoMadrid } from '../utils/date';
 import { formatFwhm } from '../utils/format';
 import { Loader } from '../components/ui/Loader';
@@ -13,19 +14,34 @@ import { Select } from '../components/ui/Select';
 export function ObservationsList() {
   const [search, setSearch] = useState('');
   const [filtroId, setFiltroId] = useState<number | ''>('');
+  const { observatorios, activo } = useObservatorioActivo();
+
   const { data: observations, isLoading } = useObservations({
     objeto: search || undefined,
     filtro_id: filtroId || undefined,
+    observatorio_id: activo?.id,
   });
   const { data: filtros } = useFilters();
   const deleteMutation = useDeleteObservacion();
 
   if (isLoading) return <Loader />;
 
+  const nombreObservatorio = (id: number | null) =>
+    (id != null && observatorios.find(o => o.id === id)?.nombre) || '—';
+
   return (
     <div>
+      <ObservatorioSelector />
+
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Observaciones</h1>
+        <div>
+          <h1 className="text-2xl font-bold">Observaciones</h1>
+          {activo && (
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              Mostrando las de <span className="font-medium">{activo.nombre}</span>
+            </p>
+          )}
+        </div>
         <Link to="/observaciones/new">
           <Button>Nueva observación</Button>
         </Link>
@@ -58,6 +74,7 @@ export function ObservationsList() {
               <tr className="border-b border-gray-200 dark:border-gray-700">
                 <th className="text-left py-3 px-4">Objeto</th>
                 <th className="text-left py-3 px-4">Fecha (Madrid)</th>
+                <th className="text-left py-3 px-4">Observatorio</th>
                 <th className="text-left py-3 px-4">FWHM</th>
                 <th className="text-left py-3 px-4">Filtro</th>
                 <th className="py-3 px-4"></th>
@@ -73,6 +90,9 @@ export function ObservationsList() {
                   </td>
                   <td className="py-3 px-4 text-gray-600 dark:text-gray-400">
                     {formatUTCtoMadrid(obs.fecha_hora_utc)}
+                  </td>
+                  <td className="py-3 px-4 text-gray-600 dark:text-gray-400">
+                    {nombreObservatorio(obs.observatorio_id)}
                   </td>
                   <td className="py-3 px-4">{formatFwhm(obs.fwhm)}</td>
                   <td className="py-3 px-4 text-gray-600 dark:text-gray-400">

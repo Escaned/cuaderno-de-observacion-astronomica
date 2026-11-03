@@ -85,5 +85,5 @@ application.
 #### Scenario: Known API route
 
 - GIVEN the packaged application
-- WHEN `/api/v1/observatorio` is requested
-- THEN the response MUST be the observatory JSON
+- WHEN `/api/v1/asociacion` is requested
+- THEN the response MUST be the association JSON

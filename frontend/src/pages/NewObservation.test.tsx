@@ -47,6 +47,15 @@ vi.mock('../hooks/useObservations', () => ({
   useUpdateObservacion: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 
+vi.mock('../hooks/useObservatorioActivo', () => ({
+  useObservatorioActivo: () => ({
+    observatorios: [],
+    activo: null,
+    isLoading: false,
+    setActivoId: vi.fn(),
+  }),
+}));
+
 function renderWithProviders(ui: React.ReactElement) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
