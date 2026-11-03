@@ -97,6 +97,47 @@ restaurar todo en cualquier momento: pegalos de vuelta en su lugar y listo.
 
 ---
 
+## Actualizar a una versión nueva (sin perder datos)
+
+**Tus datos no están adentro del programa.** Están en la carpeta `data`, así que la versión nueva los
+usa tal cual. La regla es una sola: **no borres la carpeta `data`**.
+
+### Si usás `Riguel.exe`
+
+1. Cerrá la aplicación (la ventana negra).
+2. Descomprimí el ZIP nuevo **sobre la misma carpeta** `Riguel`. Windows va a preguntar si reemplaza
+   archivos: decí que sí. La carpeta `data` no viene en el ZIP, así que no se toca.
+3. Abrí `Riguel.exe` de nuevo.
+
+Si preferís descomprimir en una carpeta nueva, copiá antes la carpeta `data` completa (la de la
+instalación vieja) adentro de la nueva.
+
+### Si instalaste con `instalar.bat`
+
+1. Cerrá la ventana de la aplicación.
+2. Descomprimí el paquete nuevo **sobre la misma carpeta**. El ZIP no trae `backend\riguel.db` ni tus
+   fotos, así que no las pisa.
+3. Doble clic en `instalar.bat`. Detecta que ya había una base, la actualiza y avisa que es una
+   actualización. No borra observaciones, ni filtros, ni el nombre de la asociación.
+
+### La copia de seguridad es automática
+
+Antes de tocar la base, la aplicación guarda una copia al lado, con la fecha en el nombre:
+
+```
+data\riguel.db.antes-de-actualizar-20261103-181500.db            (Riguel.exe)
+backend\riguel.db.antes-de-actualizar-20261103-181500.db         (instalar.bat)
+```
+
+Se conservan las últimas 5 y se pueden borrar cuando quieras. Si una actualización sale mal, cerrá la
+aplicación, renombrá esa copia como `riguel.db` (en el mismo lugar) y volvé a abrirla: quedás como
+estabas antes.
+
+> La primera vez que abras una versión nueva puede tardar unos segundos más: está actualizando la
+> base. Si ves el mensaje `Copia de seguridad de la base antes de actualizarla`, es normal.
+
+---
+
 ## Si venías de la versión anterior (la de `instalar.bat`)
 
 Tus observaciones **no se pierden**. La versión nueva las adopta sola:

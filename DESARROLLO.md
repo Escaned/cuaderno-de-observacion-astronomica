@@ -68,16 +68,30 @@ pip install -r backend/requirements.txt -r backend/requirements-dev.txt
 
 ```bash
 cd backend
-alembic upgrade head
+python -m app.core.migrations
 ```
 
 Crea las tablas y carga los **datos semilla**: la asociación *Riguel*, un observatorio
 predeterminado *Riguel* y los 6 filtros estándar (L, R, G, B, Ha, OIII).
 
-> La aplicación también actualiza la base **al arrancar** (`init_db` corre `alembic upgrade head`), y
-> `arrancar.bat` lo hace antes de levantar el servidor. Así una versión nueva nunca queda corriendo
-> contra una base vieja: sin eso, `create_all` creaba las tablas que faltaban pero jamás agregaba una
-> columna a una tabla existente, y la pantalla fallaba con un 500 que parecía un error de la interfaz.
+Ese módulo es el mismo que corre la aplicación al arrancar, y es más que `alembic upgrade head`:
+
+- **Guarda una copia** de la base antes de cualquier cambio de esquema
+  (`riguel.db.antes-de-actualizar-<fecha>.db`, se conservan las últimas 5). Si la actualización sale
+  mal, se restaura renombrando la copia. Un arranque sin migraciones pendientes no copia nada.
+- **Repara una base a medio migrar**: la versión anterior creaba `asociacion` con `create_all` y dejaba
+  `observatorio` sin `color` ni `es_predeterminado`, así que la migración 0004 fallaba con
+  `table asociacion already exists`. El módulo aparta esa tabla, migra y devuelve el nombre y el logo
+  que la persona tenía guardados.
+
+`arrancar.bat`, `instalar.bat` y el lanzador del ejecutable llaman a `python -m app.core.migrations`, no
+al comando de Alembic: `alembic upgrade head` sigue sirviendo para desarrollo, pero **se saltea las dos
+redes de seguridad**.
+
+> La aplicación también actualiza la base **al arrancar** (`init_db` llama al mismo módulo). Así una
+> versión nueva nunca queda corriendo contra una base vieja: sin eso, `create_all` creaba las tablas que
+> faltaban pero jamás agregaba una columna a una tabla existente, y la pantalla fallaba con un 500 que
+> parecía un error de la interfaz.
 
 ### 2.3 Frontend
 
@@ -141,7 +155,7 @@ automáticas para no chocar con una aplicación que ya esté abierta.
 
 ## 4. Tests
 
-**Backend** (esperado: **61 pasan, 2 se saltean**):
+**Backend** (esperado: **64 pasan, 2 se saltean**):
 
 ```bash
 cd backend
@@ -191,8 +205,11 @@ powershell -ExecutionPolicy Bypass -File empaquetar.ps1
 ```
 
 Compila el frontend, arma un ZIP limpio y **lo prueba de verdad** en una carpeta nueva: lo descomprime,
-corre `instalar.bat`, verifica que la aplicación levante y responda, y borra la carpeta de prueba. El
-resultado es `Riguel-Cuaderno-astronomico.zip`.
+corre `instalar.bat`, verifica que la aplicación levante y responda, y **simula una actualización**:
+reemplaza la base por una de la versión anterior (0003, con la tabla `asociacion` que dejaba
+`create_all` y una observación cargada), vuelve a arrancar y comprueba que la migración la repare, que
+no se pierda la observación ni el nombre de la asociación y que quede la copia de seguridad. Borra la
+carpeta de prueba. El resultado es `Riguel-Cuaderno-astronomico.zip`.
 
 Es el modo que necesita Python en la máquina de destino, y el único que permite escuchar en la red
 local (ver `INSTALL.md`).
@@ -232,6 +249,8 @@ puede fallar una vez empaquetado:
 - que se pueda crear una observación, exportar el PDF y el CSV, y subir un logo;
 - que todo eso **sobreviva a un reinicio**, que es lo que distingue una carpeta de datos de un temporal;
 - que adopte la base de una instalación anterior **por copia**, sin llevarse el archivo original;
+- que actualice una base de la versión anterior **sin perder observaciones** ni el nombre de la
+  asociación, y que deje la copia de seguridad antes de tocarla;
 - que escuche **solo en loopback**.
 
 Si cualquiera falla, la corrida termina con código distinto de cero y no anuncia un paquete válido.

@@ -37,13 +37,17 @@ echo.
 REM Actualiza la base antes de abrir nada: una version nueva puede cambiar el
 REM esquema, y la app no arranca contra una base vieja. Se hace aca para que el
 REM error se lea en esta ventana y no como una pantalla vacia en el navegador.
+REM Se llama al modulo de la aplicacion, no al comando alembic: el modulo guarda
+REM una copia de la base antes de tocarla y repara la que quedo a medio migrar.
 pushd backend
-"..\.venv\Scripts\python.exe" -m alembic upgrade head
+"..\.venv\Scripts\python.exe" -m app.core.migrations
 if errorlevel 1 (
     popd
     echo.
     echo   [ERROR] No pude actualizar la base de datos.
     echo           Lee el mensaje de arriba; la aplicacion no va a arrancar.
+    echo           Tus datos siguen en backend\riguel.db y en la copia que queda
+    echo           al lado, con la fecha en el nombre del archivo.
     echo.
     pause
     exit /b 1

@@ -153,12 +153,24 @@ REM  4. Base de datos
 REM ---------------------------------------------------------------
 echo.
 echo [4/5] Preparando la base de datos...
+if exist "backend\riguel.db" (
+    echo       Encontre una base de datos de una instalacion anterior.
+    echo       Se actualiza sin borrar nada: las observaciones y las fotos quedan.
+) else (
+    echo       Instalacion nueva: la base se crea con los datos iniciales.
+)
+REM Se llama al modulo de la aplicacion, no al comando alembic: el modulo guarda una
+REM copia de la base antes de tocarla y repara la que quedo a medio migrar.
 pushd backend
-"..\.venv\Scripts\python.exe" -m alembic upgrade head
+"..\.venv\Scripts\python.exe" -m app.core.migrations
 if errorlevel 1 (
     popd
     echo.
     echo   [ERROR] No pude preparar la base de datos.
+    echo.
+    echo           Si estabas actualizando, tus datos NO se borraron: siguen en
+    echo           backend\riguel.db y en la copia que queda al lado, con la fecha
+    echo           en el nombre del archivo.
     echo.
     goto :error
 )

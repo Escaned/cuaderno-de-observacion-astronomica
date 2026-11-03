@@ -13,10 +13,13 @@
       2. Copia el proyecto a una carpeta temporal, dejando afuera todo lo de desarrollo
       3. Genera el ZIP
       4. Lo descomprime en una carpeta limpia, corre instalar.bat y comprueba
-         que la aplicacion levante y responda. Si eso falla, el ZIP no sirve.
+         que la aplicacion levante y responda. Despues simula una ACTUALIZACION:
+         reemplaza la base por una de la version anterior y verifica que la
+         migracion la repare, guarde una copia y no pierda ni una observacion.
       5. (solo con -ConExe) Construye el ejecutable con PyInstaller y lo prueba
          entero: en una carpeta limpia, con una base de datos de por medio y
-         reiniciandolo, para comprobar que lo que guarda sobrevive.
+         reiniciandolo, para comprobar que lo que guarda sobrevive. Incluye el
+         mismo caso de actualizacion sobre data\riguel.db.
 
     Los pasos 4 y 5 son los importantes: son la unica forma de detectar que una
     dependencia falte o que algo se rompa solo al instalar desde cero. El paso 5
@@ -52,6 +55,9 @@ $puerto = 8000
 $pasos = 3
 if (-not $SoloEmpaquetar) { $pasos++ }
 if ($ConExe)              { $pasos++ }
+# El ejecutable es el ultimo paso que se corre: con -SoloEmpaquetar la verificacion
+# del ZIP no existe, asi que su numero baja para que la cuenta no salte de 3 a 5.
+$pasoExe = if ($SoloEmpaquetar) { 4 } else { 5 }
 
 # Carpeta donde queda el ejecutable listo para repartir. Puede que se pise a si
 # misma entre corridas, asi que se limpia antes de construir.
@@ -74,6 +80,104 @@ function Escribir-Aviso($texto){ Write-Host "   !    $texto" -ForegroundColor Ye
 function Get-Escuchando($p) {
     @(Get-NetTCPConnection -LocalPort $p -ErrorAction SilentlyContinue |
         Where-Object { $_.RemotePort -eq 0 })
+}
+
+# Baja el servidor aunque haya quedado como hijo de cmd.exe. `taskkill` se llama a
+# traves de cmd para que PowerShell no convierta su "no se encontro el proceso" en
+# un error cuando el servidor ya se cayo solo.
+function Stop-Aplicacion($proceso) {
+    Get-Escuchando $puerto |
+        ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }
+    if ($proceso) { cmd /c "taskkill /PID $($proceso.Id) /T /F >nul 2>&1" }
+    for ($i = 0; $i -lt 20; $i++) {
+        if (-not (Get-Escuchando $puerto)) { break }
+        Start-Sleep -Milliseconds 500
+    }
+}
+
+# Arma una base como la dejaba la version anterior: en 0003, con la tabla
+# `asociacion` que creaba create_all y con una observacion cargada. Es el estado en
+# el que una actualizacion puede romper, y el unico que importa de verdad: la
+# persona ya tiene sus datos adentro.
+#
+# Usa el python y la carpeta de migraciones que le pasen, para servir tanto al
+# paquete recien instalado como al ejecutable.
+function New-BaseVersionAnterior($pythonExe, $alembicDir, $dbPath) {
+    # Se parte de cero a proposito: lo que se simula es una instalacion anterior, no
+    # una base que se actualiza dos veces.
+    foreach ($sobra in @($dbPath, "$dbPath-wal", "$dbPath-shm")) {
+        if (Test-Path $sobra) { Remove-Item $sobra -Force }
+    }
+    $script = Join-Path $env:TEMP "riguel-base-vieja-$([guid]::NewGuid().ToString('N')).py"
+    @'
+import os, sqlite3, sys
+from alembic import command
+from alembic.config import Config
+
+alembic_dir, database = sys.argv[1], sys.argv[2]
+# `alembic/env.py` importa `app`, y eso solo funciona si `backend/` esta en el path.
+sys.path.insert(0, os.path.dirname(alembic_dir))
+
+config = Config()
+config.set_main_option("script_location", alembic_dir)
+config.set_main_option("sqlalchemy.url", "sqlite+aiosqlite:///" + database.replace("\\", "/"))
+command.upgrade(config, "0003")
+
+conexion = sqlite3.connect(database)
+conexion.execute(
+    "CREATE TABLE asociacion ("
+    " id INTEGER NOT NULL,"
+    " nombre VARCHAR(100) NOT NULL DEFAULT 'Riguel',"
+    " logo_path VARCHAR(255),"
+    " CONSTRAINT ck_asociacion_singleton CHECK (id = 1),"
+    " PRIMARY KEY (id))"
+)
+conexion.execute(
+    "INSERT INTO asociacion (id, nombre, logo_path) "
+    "VALUES (1, 'Nombre de la actualizacion', 'logo.jpg')"
+)
+conexion.execute(
+    "INSERT INTO observaciones (objeto, fecha_hora_utc, fwhm) "
+    "VALUES ('M31', '2026-02-01 22:00:00', 2.2)"
+)
+conexion.commit()
+conexion.close()
+'@ | Set-Content -Path $script -Encoding ASCII
+    & $pythonExe $script $alembicDir $dbPath
+    $codigo = $LASTEXITCODE
+    Remove-Item $script -Force -ErrorAction SilentlyContinue
+    if ($codigo -ne 0) { throw 'No pude armar la base de la version anterior.' }
+}
+
+# Lo que hay adentro de una base, en JSON, para comprobarlo despues de actualizar.
+function Get-EstadoBase($pythonExe, $dbPath) {
+    $script = Join-Path $env:TEMP "riguel-revisar-base-$([guid]::NewGuid().ToString('N')).py"
+    @'
+import json, sqlite3, sys
+
+conexion = sqlite3.connect(sys.argv[1])
+tablas = {fila[0] for fila in conexion.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
+
+def uno(sql):
+    try:
+        fila = conexion.execute(sql).fetchone()
+        return fila[0] if fila else None
+    except sqlite3.Error:
+        return None
+
+print(json.dumps({
+    "revision": uno("SELECT version_num FROM alembic_version"),
+    "asociacion": uno("SELECT nombre FROM asociacion WHERE id = 1"),
+    "observaciones": uno("SELECT COUNT(*) FROM observaciones"),
+    "tabla_apartada": "asociacion_previa" in tablas,
+}))
+conexion.close()
+'@ | Set-Content -Path $script -Encoding ASCII
+    $salida = (& $pythonExe $script $dbPath | Out-String).Trim()
+    $codigo = $LASTEXITCODE
+    Remove-Item $script -Force -ErrorAction SilentlyContinue
+    if ($codigo -ne 0) { throw "No pude leer la base ${dbPath}: $salida" }
+    return $salida | ConvertFrom-Json
 }
 
 # ---------------------------------------------------------------------------
@@ -296,19 +400,67 @@ try {
     if (@($sitios).Count -ne 1) { throw "La base del paquete deberia traer 1 observatorio y trae $(@($sitios).Count)." }
     Escribir-Ok 'base de datos limpia, un observatorio sembrado y logo por defecto en su lugar'
 
+    # --- Actualizacion: una instalacion que ya tiene datos ------------------
+    #
+    # El caso que mas caro sale si falla: la persona ya cargo sus observaciones y su
+    # nombre de asociacion. Se reemplaza la base por una de la version anterior (en
+    # 0003, con la tabla que dejaba create_all) y se arranca otra vez: la migracion
+    # tiene que repararla, guardar una copia y no perder nada.
+    Stop-Aplicacion $proc
+
+    $baseVieja = Join-Path $appDir 'backend\riguel.db'
+    $pyApp     = Join-Path $appDir '.venv\Scripts\python.exe'
+    New-BaseVersionAnterior $pyApp (Join-Path $appDir 'backend\alembic') $baseVieja
+    $antes = Get-EstadoBase $pyApp $baseVieja
+    if ($antes.revision -ne '0003') { throw "La base de prueba deberia estar en 0003 y esta en $($antes.revision)." }
+
+    $env:DATABASE_URL = "sqlite+aiosqlite:///$($baseVieja -replace '\\','/')"
+    $proc = Start-Process -FilePath 'cmd.exe' -ArgumentList '/c', 'arrancar.bat' `
+            -WorkingDirectory $appDir -PassThru -WindowStyle Minimized
+    $vivo = $false
+    for ($i = 0; $i -lt 90; $i++) {
+        Start-Sleep -Milliseconds 1000
+        try {
+            $r = Invoke-WebRequest "$base/health" -UseBasicParsing -TimeoutSec 5
+            if ($r.StatusCode -eq 200) { $vivo = $true; break }
+        } catch { }
+    }
+    if (-not $vivo) { throw 'La aplicacion no arranco contra una base de la version anterior.' }
+
+    $datos = Invoke-RestMethod "$base/api/v1/asociacion" -TimeoutSec 20
+    if ($datos.nombre -ne 'Nombre de la actualizacion') {
+        throw "La actualizacion perdio el nombre de la asociacion: dice '$($datos.nombre)'."
+    }
+    $cantObs = Invoke-RestMethod "$base/api/v1/observaciones/count" -TimeoutSec 20
+    if ([int]$cantObs -ne 1) {
+        throw "La actualizacion perdio observaciones: hay $cantObs y deberia haber 1."
+    }
+    $sitios = Invoke-RestMethod "$base/api/v1/observatorios" -TimeoutSec 20
+    if (@($sitios).Count -ne 1) { throw "La actualizacion dejo $(@($sitios).Count) observatorios en vez de 1." }
+    Escribir-Ok 'una base de la version anterior se actualizo sin perder observaciones ni nombre'
+
+    Stop-Aplicacion $proc
+    Remove-Item Env:\DATABASE_URL -ErrorAction SilentlyContinue
+
+    $despues = Get-EstadoBase $pyApp $baseVieja
+    if ($despues.revision -ne '0004') { throw "La base quedo en $($despues.revision) y deberia quedar en 0004." }
+    if ($despues.tabla_apartada) { throw 'Quedo la tabla asociacion_previa: la reparacion no termino.' }
+    if ([int]$despues.observaciones -ne 1) { throw 'La observacion no quedo guardada en la base.' }
+
+    $respaldos = @(Get-ChildItem (Join-Path $appDir 'backend') -Filter 'riguel.db.antes-de-actualizar-*.db')
+    if ($respaldos.Count -lt 1) { throw 'La actualizacion no dejo copia de seguridad de la base.' }
+    $copia = Get-EstadoBase $pyApp $respaldos[0].FullName
+    if ($copia.revision -ne '0003') {
+        throw "La copia de seguridad no es la base anterior: dice $($copia.revision)."
+    }
+    Escribir-Ok "guardo la copia de seguridad antes de actualizar ($($respaldos[0].Name))"
+
 } finally {
     # Arrancar.bat deja a uvicorn como hijo de cmd.exe, asi que hay que matar el
     # arbol entero: matar solo el cmd deja el servidor vivo, el ZIP de prueba no
     # se puede borrar y la proxima corrida falla al limpiar el temporal.
-    Get-Escuchando $puerto |
-        ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }
-    if ($proc) { & taskkill /PID $proc.Id /T /F 2>&1 | Out-Null }
+    Stop-Aplicacion $proc
     Remove-Item Env:\RIGUEL_SIN_NAVEGADOR -ErrorAction SilentlyContinue
-    # Esperar a que el puerto quede libre de verdad antes de seguir.
-    for ($i = 0; $i -lt 20; $i++) {
-        if (-not (Get-Escuchando $puerto)) { break }
-        Start-Sleep -Milliseconds 500
-    }
 }
 
 Remove-Item $prueba -Recurse -Force -ErrorAction SilentlyContinue
@@ -333,7 +485,7 @@ $espec      = Join-Path $raiz 'riguel.spec'
 $zipExe     = Join-Path $raiz "$nombre-exe.zip"
 
 # --- Construir -------------------------------------------------------------
-Escribir-Paso "5/$pasos  Construyendo el ejecutable"
+Escribir-Paso "$pasoExe/$pasos  Construyendo el ejecutable"
 
 if (-not (Test-Path $espec))  { throw 'Falta riguel.spec en la raiz del proyecto.' }
 if (-not (Test-Path $python)) {
@@ -379,7 +531,7 @@ foreach ($relativo in @(
 Escribir-Ok 'trae adentro la interfaz compilada, las migraciones y el logo'
 
 # --- Probar -----------------------------------------------------------------
-Escribir-Paso "5/$pasos  Probando el ejecutable desde cero"
+Escribir-Paso "$pasoExe/$pasos  Probando el ejecutable desde cero"
 
 New-Item -ItemType Directory -Path $pruebaExe -Force | Out-Null
 Copy-Item $appExe -Destination $pruebaExe -Recurse
@@ -608,6 +760,34 @@ try {
         throw "Piso la base en uso con la anterior: dice '$($datos.nombre)' y deberia decir '$marcaNueva'."
     }
     Escribir-Ok 'con las dos bases presentes gana la que esta en uso'
+
+    # --- Actualizacion: la base de una version anterior, ya en data\ ----------
+    #
+    # El ejecutable corre la misma reparacion que el paquete. Si esto falla, quien ya
+    # venia usando la aplicacion se queda sin sus observaciones, que es lo peor que
+    # puede pasar en una actualizacion.
+    Detener-Exe $procExe
+    $dbExe = Join-Path $copia 'data\riguel.db'
+    New-BaseVersionAnterior $python (Join-Path $raiz 'backend\alembic') $dbExe
+
+    $procExe = Iniciar-Exe 5
+    if (-not (Esperar-Exe)) { throw 'El ejecutable no arranco contra una base de la version anterior.' }
+    $datos = Invoke-RestMethod "$baseExe/api/v1/asociacion" -TimeoutSec 20
+    if ($datos.nombre -ne 'Nombre de la actualizacion') {
+        throw "El ejecutable perdio el nombre de la asociacion: dice '$($datos.nombre)'."
+    }
+    $cantObs = Invoke-RestMethod "$baseExe/api/v1/observaciones/count" -TimeoutSec 20
+    if ([int]$cantObs -ne 1) {
+        throw "El ejecutable perdio observaciones: hay $cantObs y deberia haber 1."
+    }
+    Detener-Exe $procExe
+
+    $estado = Get-EstadoBase $python $dbExe
+    if ($estado.revision -ne '0004') { throw "La base quedo en $($estado.revision) y deberia quedar en 0004." }
+    if ($estado.tabla_apartada) { throw 'Quedo la tabla asociacion_previa: la reparacion no termino.' }
+    $respaldosExe = @(Get-ChildItem (Join-Path $copia 'data') -Filter 'riguel.db.antes-de-actualizar-*.db')
+    if ($respaldosExe.Count -lt 1) { throw 'El ejecutable no dejo copia de seguridad al actualizar.' }
+    Escribir-Ok 'una base de la version anterior se actualizo sin perder nada, con copia previa'
 
 } finally {
     Detener-Exe $procExe
