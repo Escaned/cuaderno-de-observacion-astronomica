@@ -281,12 +281,12 @@ Queda fuera del paquete lo que es desarrollo o estado local: `node_modules`, `.v
 powershell -ExecutionPolicy Bypass -File empaquetar.ps1 -ConExe -Publicar
 ```
 
-Sube los ZIP ya verificados a GitHub Releases con `gh`. Queda una URL fija para repartir, que
-siempre apunta a la última versión:
+Sube los ZIP ya verificados a GitHub Releases con `gh`.
 
-```
-https://github.com/Escaned/cuaderno-de-observacion-astronomica/releases/latest/download/Riguel-Cuaderno-astronomico-exe.zip
-```
+> **El repositorio es privado.** La URL de descarga
+> (`https://github.com/Escaned/cuaderno-de-observacion-astronomica/releases/latest/download/...`)
+> pide sesión de GitHub: sirve para quien tenga acceso al repo, no para repartir el link a
+> cualquiera. Si algún día el repo pasa a público, la misma URL funciona sin cambios.
 
 Las comprobaciones corren **antes** de compilar, que es cuando todavía son baratas:
 
@@ -299,8 +299,10 @@ Las comprobaciones corren **antes** de compilar, que es cuando todavía son bara
 | Tag inexistente, local y remoto | pisar un tag confunde a quien ya descargó la versión anterior |
 
 El release se crea **después** de que pasaron las verificaciones de 5.1 y 5.2. Al final compara el
-tamaño de cada asset publicado con el del disco y prueba la URL fija: que el release exista no
-garantiza que se pueda descargar.
+tamaño de cada asset publicado con el del disco, los vuelve a bajar con `gh release download` y
+compara el **SHA256**: que el release exista no garantiza que el archivo se pueda recuperar entero.
+La comprobación de la URL fija con un pedido anónimo solo corre si el repo es público — en uno
+privado devuelve 404 aunque todo esté bien, y el script avisa en vez de fallar.
 
 `-Publicar` no se puede combinar con `-SoloEmpaquetar`: un paquete sin verificar no se publica.
 

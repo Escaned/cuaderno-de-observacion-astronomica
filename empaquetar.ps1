@@ -36,7 +36,10 @@
     -SoloEmpaquetar: un paquete sin verificar no se publica. Antes de tocar la red
     comprueba que la version de frontend/package.json y la de backend/app/main.py
     coincidan, que el arbol este limpio, que HEAD sea origin/main y que el tag no
-    exista. El release se crea recien cuando TODAS las verificaciones pasaron.
+    exista. El release se crea recien cuando TODAS las verificaciones pasaron, y
+    despues lo baja de vuelta para comparar el SHA256. Con un repositorio privado
+    avisa que la URL publica pide sesion de GitHub: el release sirve para quien
+    tenga acceso al repo, no para repartir el link a cualquiera.
 #>
 
 param(
@@ -219,6 +222,7 @@ Escribir-Ok "puerto $puerto libre"
 $versionApp   = $null
 $tagRelease   = $null
 $repoGh       = $null
+$visibilidad  = $null
 $commitLocal  = $null
 if ($Publicar) {
     if ($SoloEmpaquetar) {
@@ -279,7 +283,8 @@ if ($Publicar) {
 
     $repoGh = (gh repo view --json nameWithOwner --jq '.nameWithOwner' 2>$null)
     if (-not $repoGh) { throw 'No pude averiguar el repositorio de GitHub (gh repo view).' }
-    Escribir-Ok "repositorio de destino: $repoGh"
+    $visibilidad = (gh repo view --json visibility --jq '.visibility' 2>$null)
+    Escribir-Ok "repositorio de destino: $repoGh ($visibilidad)"
 }
 
 # ---------------------------------------------------------------------------
@@ -971,28 +976,57 @@ foreach ($archivo in $assets) {
 }
 Escribir-Ok "los archivos subieron completos ($($nombresAssets -join ', '))"
 
-# La URL fija es la que se le pasa a la gente: si no responde, el release existe pero
-# nadie puede bajar nada. Se reintenta porque GitHub tarda unos segundos en publicar
-# la redireccion de /releases/latest.
-foreach ($nombreArchivo in $nombresAssets) {
-    $urlFija = "https://github.com/$repoGh/releases/latest/download/$nombreArchivo"
-    $responde = $false
-    for ($intento = 0; $intento -lt 8 -and -not $responde; $intento++) {
-        try {
-            $r = Invoke-WebRequest $urlFija -Method Head -UseBasicParsing -TimeoutSec 30
-            if ($r.StatusCode -eq 200) { $responde = $true }
-        } catch { }
-        if (-not $responde) { Start-Sleep -Seconds 3 }
+# Que los archivos se puedan bajar de verdad. Se descargan con gh, que va
+# autenticado: es la unica forma de comprobarlo en un repo privado, donde la URL
+# publica devuelve 404 aunque el release este perfecto. Y se compara el SHA256, no
+# el tamano: un archivo truncado o cambiado en el camino se detecta igual.
+$carpetaDescarga = Join-Path $env:TEMP "riguel-descarga-$tagRelease"
+if (Test-Path $carpetaDescarga) { Remove-Item $carpetaDescarga -Recurse -Force }
+New-Item -ItemType Directory -Path $carpetaDescarga -Force | Out-Null
+try {
+    foreach ($archivo in $assets) {
+        $info = Get-Item $archivo
+        gh release download $tagRelease --pattern $info.Name --dir $carpetaDescarga --clobber
+        if ($LASTEXITCODE -ne 0) { throw "No pude descargar $($info.Name) del release." }
+        $bajado = Join-Path $carpetaDescarga $info.Name
+        if (-not (Test-Path $bajado)) { throw "El release no entrego $($info.Name)." }
+        $hashLocal  = (Get-FileHash $archivo -Algorithm SHA256).Hash
+        $hashBajado = (Get-FileHash $bajado  -Algorithm SHA256).Hash
+        if ($hashLocal -ne $hashBajado) {
+            throw "El archivo $($info.Name) se descarga distinto de como se subio (SHA256 no coincide)."
+        }
     }
-    # Algunos CDN no contestan HEAD: antes de darlo por roto se prueba una descarga.
-    if (-not $responde) {
-        try {
-            $r = Invoke-WebRequest $urlFija -UseBasicParsing -TimeoutSec 180
-            if ($r.StatusCode -eq 200) { $responde = $true }
-        } catch { }
+} finally {
+    Remove-Item $carpetaDescarga -Recurse -Force -ErrorAction SilentlyContinue
+}
+Escribir-Ok "los archivos se descargan enteros, con el mismo SHA256 que en disco"
+
+# La URL fija solo se puede repartir si el repositorio es publico. En uno privado
+# pide sesion de GitHub: el release sirve para quien tenga acceso al repo, no para
+# mandarle el link a cualquiera. Se avisa en vez de fallar, porque el release esta bien.
+if ($visibilidad -eq 'PUBLIC') {
+    foreach ($nombreArchivo in $nombresAssets) {
+        $urlFija = "https://github.com/$repoGh/releases/latest/download/$nombreArchivo"
+        $responde = $false
+        for ($intento = 0; $intento -lt 8 -and -not $responde; $intento++) {
+            try {
+                $r = Invoke-WebRequest $urlFija -Method Head -UseBasicParsing -TimeoutSec 30
+                if ($r.StatusCode -eq 200) { $responde = $true }
+            } catch { }
+            if (-not $responde) { Start-Sleep -Seconds 3 }
+        }
+        # Algunos CDN no contestan HEAD: antes de darlo por roto se prueba una descarga.
+        if (-not $responde) {
+            try {
+                $r = Invoke-WebRequest $urlFija -UseBasicParsing -TimeoutSec 180
+                if ($r.StatusCode -eq 200) { $responde = $true }
+            } catch { }
+        }
+        if (-not $responde) { throw "La URL fija $urlFija no responde: el release existe pero nadie podria descargarlo." }
+        Escribir-Ok "descarga fija andando: $urlFija"
     }
-    if (-not $responde) { throw "La URL fija $urlFija no responde: el release existe pero nadie podria descargarlo." }
-    Escribir-Ok "descarga fija andando: $urlFija"
+} else {
+    Escribir-Aviso "el repositorio es privado: la URL de descarga pide sesion de GitHub y solo sirve para quien tenga acceso al repo"
 }
 
 }
@@ -1018,6 +1052,10 @@ if ($Publicar) {
     Write-Host ''
     Write-Host "  Release $tagRelease publicado:" -ForegroundColor Green
     Write-Host "    https://github.com/$repoGh/releases/tag/$tagRelease"
-    Write-Host "    Descarga fija: https://github.com/$repoGh/releases/latest/download/$nombre.zip"
+    if ($visibilidad -eq 'PUBLIC') {
+        Write-Host "    Descarga fija: https://github.com/$repoGh/releases/latest/download/$nombre.zip"
+    } else {
+        Write-Host "    Repo privado: para descargarlo hay que tener acceso al repositorio" -ForegroundColor Yellow
+    }
 }
 Write-Host ''
