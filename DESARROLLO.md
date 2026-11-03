@@ -74,6 +74,11 @@ alembic upgrade head
 Crea las tablas y carga los **datos semilla**: la asociación *Riguel*, un observatorio
 predeterminado *Riguel* y los 6 filtros estándar (L, R, G, B, Ha, OIII).
 
+> La aplicación también actualiza la base **al arrancar** (`init_db` corre `alembic upgrade head`), y
+> `arrancar.bat` lo hace antes de levantar el servidor. Así una versión nueva nunca queda corriendo
+> contra una base vieja: sin eso, `create_all` creaba las tablas que faltaban pero jamás agregaba una
+> columna a una tabla existente, y la pantalla fallaba con un 500 que parecía un error de la interfaz.
+
 ### 2.3 Frontend
 
 ```bash
@@ -136,7 +141,7 @@ automáticas para no chocar con una aplicación que ya esté abierta.
 
 ## 4. Tests
 
-**Backend** (esperado: **58 pasan, 2 se saltean**):
+**Backend** (esperado: **61 pasan, 2 se saltean**):
 
 ```bash
 cd backend
@@ -146,7 +151,7 @@ pytest
 Los 2 saltos son tests `async def` preexistentes a los que les falta el decorador
 `@pytest.mark.asyncio`.
 
-**Frontend** (esperado: **22 pasan**):
+**Frontend** (esperado: **27 pasan**):
 
 ```bash
 cd frontend
@@ -267,6 +272,7 @@ Queda fuera del paquete lo que es desarrollo o estado local: `node_modules`, `.v
 | Cambiaste código del backend y **no se refleja**: `/health` responde, pero un endpoint nuevo da 404 | `uvicorn --reload` dejó un worker huérfano sirviendo código viejo | Matá **todos** los procesos `python run.py` y sus hijos (`multiprocessing-fork`), y arrancá de nuevo |
 | Abrís `:8000` y ves la **versión anterior de la interfaz** | `frontend/dist` quedó compilado de antes | Usá `:5173` en desarrollo, o corré `npm run build` |
 | Al guardar la asociación responde **405 Method Not Allowed** (o "método no permitido") | La pestaña abierta antes de recompilar sigue ejecutando el bundle viejo y llama a una ruta que ya no existe (`/api/v1/observatorio`); el fallback estático responde 405 a todo lo que no sea GET | Recargá con **Ctrl+Shift+R** o cerrá y volvé a abrir la app. `index.html` se sirve con `Cache-Control: no-store` para que no vuelva a pasar |
+| Al guardar un observatorio la pantalla dice **"no se puede guardar el observatorio"** y `/api/v1/observatorios` responde **500** | La base quedó a medio migrar: una versión anterior creó `asociacion` con `create_all` pero dejó `observatorio` en el esquema viejo (sin `color` ni `es_predeterminado`) | Cerrá la app y volvé a abrirla: `init_db` y `arrancar.bat` corren `alembic upgrade head`. Si la base quedó con una tabla de más, mirá el error del arranque; el detalle de la migración está en `backend/alembic/versions/0004_observatorios.py` |
 | Un `.bat` "salta" instrucciones o no respeta los `goto` | El archivo quedó guardado con saltos de línea **LF** en vez de **CRLF** | Volvé a guardarlo con CRLF. Aplica a `.bat`, `.cmd` **y `.ps1`**: `.gitattributes` los clava en CRLF, y editarlos con una herramienta que escribe LF rompe la regla |
 | `Failed to load Python DLL ... _internal\python313.dll` al abrir el `.exe` | El ejecutable se separó de su carpeta `_internal` | No tiene arreglo desde el código: PyInstaller corta en el *bootloader*, antes de que corra una sola línea de Python, así que ningún manejador nuestro llega a ejecutarse. La única respuesta es copiar la carpeta `Riguel` completa, y por eso `INSTALL.md` lo avisa |
 | La verificación del ejecutable dice `Deberia haber 6 filtros y hay 1` | En PowerShell **5.1** `@(Invoke-RestMethod ...)` en una sola línea da 1: la llamada entrega el arreglo como **un solo objeto** en vez de enumerarlo. En PowerShell 7 lo enumera, así que el error solo aparece corriendo el script como se documenta (`powershell -File`), no a mano en `pwsh` | Asigná primero y envolvé después (`$x = Invoke-RestMethod ...; @($x).Count`), o usá un endpoint que devuelva un entero (`/count`). Ya está resuelto así en `empaquetar.ps1` |

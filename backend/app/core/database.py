@@ -1,7 +1,10 @@
+import asyncio
+
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.pool import NullPool
 
+from app.core import migrations
 from app.core.config import settings
 
 
@@ -36,9 +39,21 @@ async def get_session() -> AsyncSession:
             await session.close()
 
 
-async def init_db() -> None:
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+async def init_db(database_url: str | None = None) -> None:
+    """Bring the database up to date, applying every pending migration.
+
+    `create_all` alone is not enough: it creates missing tables but never alters an
+    existing one, so a database from an older version keeps its old columns and the
+    new code fails against it with a 500 that looks like a bug in the screen. Run on
+    startup so every way of starting the app - launcher, `arrancar.bat`, uvicorn -
+    upgrades the database before serving requests.
+
+    Alembic's environment script calls `asyncio.run()`, which cannot run inside the
+    event loop FastAPI already owns; a worker thread gets its own loop.
+    """
+    await asyncio.to_thread(
+        migrations.upgrade_to_head, database_url or settings.database_url
+    )
 
 
 async def close_db() -> None:

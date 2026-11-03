@@ -34,6 +34,22 @@ echo.
 echo ------------------------------------------------------------
 echo.
 
+REM Actualiza la base antes de abrir nada: una version nueva puede cambiar el
+REM esquema, y la app no arranca contra una base vieja. Se hace aca para que el
+REM error se lea en esta ventana y no como una pantalla vacia en el navegador.
+pushd backend
+"..\.venv\Scripts\python.exe" -m alembic upgrade head
+if errorlevel 1 (
+    popd
+    echo.
+    echo   [ERROR] No pude actualizar la base de datos.
+    echo           Lee el mensaje de arriba; la aplicacion no va a arrancar.
+    echo.
+    pause
+    exit /b 1
+)
+popd
+
 REM Abre el navegador en segundo plano, esperando a que el servidor responda.
 REM Definiendo la variable RIGUEL_SIN_NAVEGADOR no se abre (util en pruebas automaticas).
 if defined RIGUEL_SIN_NAVEGADOR goto :servidor
