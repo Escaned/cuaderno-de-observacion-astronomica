@@ -81,6 +81,12 @@ if FRONTEND_DIST.is_dir():
     if _assets.is_dir():
         app.mount("/assets", StaticFiles(directory=_assets), name="assets")
 
+    # The built app is served with no-store on purpose: after an update the
+    # browser must not keep running the previous bundle. A stale bundle calls
+    # routes that no longer exist and the static fallback answers 405 ("Method
+    # Not Allowed"), which looks like a broken app instead of an outdated tab.
+    index_headers = {"Cache-Control": "no-store"}
+
     @app.get("/{full_path:path}", include_in_schema=False)
     async def serve_spa(full_path: str):
         """Serve the built app and let client-side routing handle unknown paths."""
@@ -91,6 +97,6 @@ if FRONTEND_DIST.is_dir():
         # else gets index.html so React Router can resolve the route.
         candidate = (_dist / full_path).resolve()
         if full_path and candidate.is_relative_to(_dist) and candidate.is_file():
-            return FileResponse(candidate)
+            return FileResponse(candidate, headers={"Cache-Control": "no-cache"})
 
-        return FileResponse(_dist / "index.html")
+        return FileResponse(_dist / "index.html", headers=index_headers)
