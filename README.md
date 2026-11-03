@@ -13,6 +13,10 @@ servidores externos.
 
 Solo necesitás **Windows con Python 3.12, 3.13 o 3.14**: no hace falta Node.js.
 
+El último paquete se descarga desde **[Releases](https://github.com/Escaned/cuaderno-de-observacion-astronomica/releases/latest)**:
+`Riguel-Cuaderno-astronomico-exe.zip` no necesita Python (descomprimir y doble clic en `Riguel.exe`),
+y `Riguel-Cuaderno-astronomico.zip` es el que se instala con los pasos de abajo.
+
 1. Descomprimí el paquete
 2. Doble clic en **`instalar.bat`**
 3. Doble clic en **`arrancar.bat`** → se abre el navegador en http://localhost:8000

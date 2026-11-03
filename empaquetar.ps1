@@ -7,6 +7,7 @@
         powershell -ExecutionPolicy Bypass -File empaquetar.ps1 -SoloEmpaquetar
         powershell -ExecutionPolicy Bypass -File empaquetar.ps1 -ConExe
         powershell -ExecutionPolicy Bypass -File empaquetar.ps1 -SoloEmpaquetar -ConExe
+        powershell -ExecutionPolicy Bypass -File empaquetar.ps1 -ConExe -Publicar
 
     Que hace:
       1. Compila el frontend (npm run build)
@@ -20,6 +21,7 @@
          entero: en una carpeta limpia, con una base de datos de por medio y
          reiniciandolo, para comprobar que lo que guarda sobrevive. Incluye el
          mismo caso de actualizacion sobre data\riguel.db.
+      6. (solo con -Publicar) Crea el release en GitHub con los ZIP ya verificados.
 
     Los pasos 4 y 5 son los importantes: son la unica forma de detectar que una
     dependencia falte o que algo se rompa solo al instalar desde cero. El paso 5
@@ -29,11 +31,18 @@
     -SoloEmpaquetar saltea el paso 4. Combinado con -ConExe saltea la instalacion
     completa y va derecho al ejecutable, que es lo comodo mientras se lo esta
     ajustando.
+
+    -Publicar sube el resultado a GitHub Releases y NO se puede combinar con
+    -SoloEmpaquetar: un paquete sin verificar no se publica. Antes de tocar la red
+    comprueba que la version de frontend/package.json y la de backend/app/main.py
+    coincidan, que el arbol este limpio, que HEAD sea origin/main y que el tag no
+    exista. El release se crea recien cuando TODAS las verificaciones pasaron.
 #>
 
 param(
     [switch]$SoloEmpaquetar,
-    [switch]$ConExe
+    [switch]$ConExe,
+    [switch]$Publicar
 )
 
 $ErrorActionPreference = 'Stop'
@@ -55,9 +64,11 @@ $puerto = 8000
 $pasos = 3
 if (-not $SoloEmpaquetar) { $pasos++ }
 if ($ConExe)              { $pasos++ }
-# El ejecutable es el ultimo paso que se corre: con -SoloEmpaquetar la verificacion
-# del ZIP no existe, asi que su numero baja para que la cuenta no salte de 3 a 5.
+if ($Publicar)            { $pasos++ }
+# El ejecutable va antes de publicar, y con -SoloEmpaquetar la verificacion del ZIP
+# no existe, asi que su numero baja para que la cuenta no salte de 3 a 5.
 $pasoExe = if ($SoloEmpaquetar) { 4 } else { 5 }
+$pasoPublicar = $pasos
 
 # Carpeta donde queda el ejecutable listo para repartir. Puede que se pise a si
 # misma entre corridas, asi que se limpia antes de construir.
@@ -200,6 +211,76 @@ if ($ocupado) {
     throw "El puerto $puerto esta ocupado. Cerra la aplicacion antes de empaquetar (la verificacion necesita ese puerto)."
 }
 Escribir-Ok "puerto $puerto libre"
+
+# --- Publicacion: todo lo que se puede comprobar sin tocar la red --------------
+#
+# Estas guardas van ANTES de compilar. Descubrir a los diez minutos de build que el
+# tag ya existia, o que el arbol estaba sucio, es la forma mas cara de enterarse.
+$versionApp   = $null
+$tagRelease   = $null
+$repoGh       = $null
+$commitLocal  = $null
+if ($Publicar) {
+    if ($SoloEmpaquetar) {
+        throw '-Publicar no se puede combinar con -SoloEmpaquetar: un paquete sin verificar no se publica.'
+    }
+    if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
+        throw 'No encontre gh (GitHub CLI). Instalalo desde https://cli.github.com y volve a intentar.'
+    }
+    gh auth status *> $null
+    if ($LASTEXITCODE -ne 0) { throw 'gh no esta autenticado. Corre: gh auth login' }
+    Escribir-Ok 'gh disponible y autenticado'
+
+    # La version es una sola: manda el package.json del frontend y main.py tiene que
+    # coincidir. Si se desincronizan, el release diria una cosa y la aplicacion otra.
+    $versionApp = (Get-Content (Join-Path $raiz 'frontend\package.json') -Raw | ConvertFrom-Json).version
+    if (-not $versionApp -or $versionApp -notmatch '^\d+\.\d+\.\d+$') {
+        throw "No pude leer una version valida de frontend/package.json ('$versionApp')."
+    }
+    $mainPy = Get-Content (Join-Path $raiz 'backend\app\main.py') -Raw
+    if ($mainPy -notmatch 'version\s*=\s*"([^"]+)"') {
+        throw 'No encontre la version de la aplicacion en backend/app/main.py.'
+    }
+    $versionBackend = $Matches[1]
+    if ($versionBackend -ne $versionApp) {
+        throw "La version no coincide: frontend/package.json dice $versionApp y backend/app/main.py dice $versionBackend."
+    }
+    $tagRelease = "v$versionApp"
+    Escribir-Ok "version $versionApp (tag $tagRelease) consistente en frontend y backend"
+
+    # Un ZIP armado desde un arbol sucio no corresponde a ningun commit: nadie podria
+    # reconstruirlo despues. El release tiene que salir de un estado reproducible.
+    $sucio = @(git status --porcelain)
+    if ($sucio.Count -gt 0) {
+        throw "Hay cambios sin commitear: el paquete tiene que salir de un commit limpio.`n$($sucio -join "`n")"
+    }
+    git fetch origin --quiet
+    if ($LASTEXITCODE -ne 0) { throw 'No pude consultar origin.' }
+    $rama = (git rev-parse --abbrev-ref HEAD).Trim()
+    if ($rama -ne 'main') { throw "Estas en la rama '$rama': un release se publica desde main." }
+    $commitLocal  = (git rev-parse HEAD).Trim()
+    $commitRemoto = (git rev-parse origin/main).Trim()
+    if ($commitLocal -ne $commitRemoto) {
+        throw "HEAD ($commitLocal) no coincide con origin/main ($commitRemoto): hace falta push antes de publicar."
+    }
+    Escribir-Ok "arbol limpio y main al dia con origin ($($commitLocal.Substring(0, 7)))"
+
+    # Reusar un tag es peor que fallar: el release anterior quedaria pisado y quien
+    # ya lo descargo no tendria forma de distinguir una version de la otra.
+    git rev-parse -q --verify "refs/tags/$tagRelease" *> $null
+    if ($LASTEXITCODE -eq 0) {
+        throw "El tag $tagRelease ya existe localmente: subi la version antes de publicar."
+    }
+    $tagEnOrigin = (git ls-remote --tags --refs origin "refs/tags/$tagRelease") -join ''
+    if ($tagEnOrigin) {
+        throw "El tag $tagRelease ya existe en origin: subi la version antes de publicar."
+    }
+    Escribir-Ok "el tag $tagRelease no existe ni local ni en origin"
+
+    $repoGh = (gh repo view --json nameWithOwner --jq '.nameWithOwner' 2>$null)
+    if (-not $repoGh) { throw 'No pude averiguar el repositorio de GitHub (gh repo view).' }
+    Escribir-Ok "repositorio de destino: $repoGh"
+}
 
 # ---------------------------------------------------------------------------
 # 1. Compilar el frontend
@@ -825,6 +906,97 @@ Remove-Item $tmpExe -Recurse -Force -ErrorAction SilentlyContinue
 
 }
 
+# ---------------------------------------------------------------------------
+# 6. Publicar el release (-Publicar)
+# ---------------------------------------------------------------------------
+#
+# Se publica recien aca, cuando los pasos 4 y 5 ya pasaron. Publicar antes de
+# verificar es la forma mas facil de mandarle a la gente un ZIP roto: el release
+# queda online y la persona lo descarga sin saber que nadie lo probo.
+if ($Publicar) {
+
+Escribir-Paso "$pasoPublicar/$pasos  Publicando $tagRelease en GitHub"
+
+# Los dos paquetes: el de scripts (necesita Python) y, si se construyo, el ejecutable
+# (no necesita nada). INSTALL.md documenta las dos formas, asi que el release tambien
+# tiene que ofrecer las dos.
+$assets = @($zipDestino)
+if ($ConExe -and $zipExe -and (Test-Path $zipExe)) { $assets += $zipExe }
+$nombresAssets = @($assets | ForEach-Object { (Get-Item $_).Name })
+
+$notasPath = Join-Path $env:TEMP "riguel-release-$tagRelease.md"
+$notas = @"
+Riguel - Cuaderno de Campo Astronomico $versionApp
+
+## Que trae esta version
+
+- Varios observatorios con selector, color por sitio y uno predeterminado.
+- Las actualizaciones se aplican al arrancar: la base se migra sin perder datos y se guarda una copia antes de tocarla.
+- La interfaz deja de quedar cacheada con una version vieja despues de actualizar.
+
+## Que descargar
+
+"@
+if ($nombresAssets -contains "$nombre-exe.zip") {
+    $notas += "- ``$nombre-exe.zip``: no necesita Python. Descomprimir y doble clic en Riguel.exe (ver INSTALL.md).`n"
+}
+if ($nombresAssets -contains "$nombre.zip") {
+    $notas += "- ``$nombre.zip``: necesita Python 3.12, 3.13 o 3.14. Descomprimir, doble clic en instalar.bat y despues en arrancar.bat.`n"
+}
+Set-Content -Path $notasPath -Value $notas -Encoding ASCII
+
+# Las comillas van puestas a mano: los nombres no las llevan, pero las rutas si
+# pueden tener espacios y cmd /c parte los argumentos por espacios sin avisar.
+$listaAssets = ($assets | ForEach-Object { '"' + $_ + '"' }) -join ' '
+$ordenGh = 'gh release create {0} {1} --title "{2}" --target {3} --notes-file "{4}"' -f `
+    $tagRelease, $listaAssets, "Riguel Cuaderno de Campo Astronomico $versionApp", $commitLocal, $notasPath
+cmd /c $ordenGh
+$codigoGh = $LASTEXITCODE
+Remove-Item $notasPath -Force -ErrorAction SilentlyContinue
+if ($codigoGh -ne 0) { throw "gh release create fallo con codigo $codigoGh." }
+Escribir-Ok "release $tagRelease creado"
+
+# Que los archivos hayan llegado enteros. gh no falla si sube un asset truncado,
+# asi que se compara el tamano publicado con el del disco.
+$jsonRelease = gh release view $tagRelease --json assets,url
+if ($LASTEXITCODE -ne 0) { throw "No pude leer el release $tagRelease despues de crearlo." }
+$release = $jsonRelease | ConvertFrom-Json
+foreach ($archivo in $assets) {
+    $info = Get-Item $archivo
+    $subido = $release.assets | Where-Object { $_.name -eq $info.Name }
+    if (-not $subido) { throw "El release no tiene el archivo $($info.Name)." }
+    if ([long]$subido.size -ne [long]$info.Length) {
+        throw "El archivo $($info.Name) subio con $($subido.size) bytes y en disco pesa $($info.Length)."
+    }
+}
+Escribir-Ok "los archivos subieron completos ($($nombresAssets -join ', '))"
+
+# La URL fija es la que se le pasa a la gente: si no responde, el release existe pero
+# nadie puede bajar nada. Se reintenta porque GitHub tarda unos segundos en publicar
+# la redireccion de /releases/latest.
+foreach ($nombreArchivo in $nombresAssets) {
+    $urlFija = "https://github.com/$repoGh/releases/latest/download/$nombreArchivo"
+    $responde = $false
+    for ($intento = 0; $intento -lt 8 -and -not $responde; $intento++) {
+        try {
+            $r = Invoke-WebRequest $urlFija -Method Head -UseBasicParsing -TimeoutSec 30
+            if ($r.StatusCode -eq 200) { $responde = $true }
+        } catch { }
+        if (-not $responde) { Start-Sleep -Seconds 3 }
+    }
+    # Algunos CDN no contestan HEAD: antes de darlo por roto se prueba una descarga.
+    if (-not $responde) {
+        try {
+            $r = Invoke-WebRequest $urlFija -UseBasicParsing -TimeoutSec 180
+            if ($r.StatusCode -eq 200) { $responde = $true }
+        } catch { }
+    }
+    if (-not $responde) { throw "La URL fija $urlFija no responde: el release existe pero nadie podria descargarlo." }
+    Escribir-Ok "descarga fija andando: $urlFija"
+}
+
+}
+
 Write-Host ''
 Write-Host '============================================================' -ForegroundColor Green
 Write-Host '  PAQUETE LISTO Y VERIFICADO' -ForegroundColor Green
@@ -841,5 +1013,11 @@ if ($ConExe) {
     Write-Host "    Carpeta: $appExe"
     Write-Host "    Archivo: $zipExe"
     Write-Host '  Quien lo reciba: descomprimir y doble clic en Riguel.exe.'
+}
+if ($Publicar) {
+    Write-Host ''
+    Write-Host "  Release $tagRelease publicado:" -ForegroundColor Green
+    Write-Host "    https://github.com/$repoGh/releases/tag/$tagRelease"
+    Write-Host "    Descarga fija: https://github.com/$repoGh/releases/latest/download/$nombre.zip"
 }
 Write-Host ''

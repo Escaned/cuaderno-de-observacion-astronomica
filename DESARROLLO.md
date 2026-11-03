@@ -275,6 +275,38 @@ Queda fuera del paquete lo que es desarrollo o estado local: `node_modules`, `.v
 `__pycache__`, `.pytest_cache`, `riguel.db` y las fotos que hayas subido a
 `backend/data/imagenes` (se conserva el logo por defecto).
 
+### 5.5 Publicar el release (opt-in)
+
+```powershell
+powershell -ExecutionPolicy Bypass -File empaquetar.ps1 -ConExe -Publicar
+```
+
+Sube los ZIP ya verificados a GitHub Releases con `gh`. Queda una URL fija para repartir, que
+siempre apunta a la última versión:
+
+```
+https://github.com/Escaned/cuaderno-de-observacion-astronomica/releases/latest/download/Riguel-Cuaderno-astronomico-exe.zip
+```
+
+Las comprobaciones corren **antes** de compilar, que es cuando todavía son baratas:
+
+| Comprueba | Por qué |
+|---|---|
+| `gh` instalado y autenticado | un fallo de login a los diez minutos de build no tiene gracia |
+| Versión igual en `frontend/package.json` y `backend/app/main.py` | el tag sale de ahí (`v1.1.0`); si no coinciden, el release diría una cosa y la app otra |
+| Árbol limpio | un ZIP armado desde cambios sin commitear no se puede reconstruir |
+| `HEAD` igual a `origin/main` | publicar código que no está en GitHub deja un release huérfano |
+| Tag inexistente, local y remoto | pisar un tag confunde a quien ya descargó la versión anterior |
+
+El release se crea **después** de que pasaron las verificaciones de 5.1 y 5.2. Al final compara el
+tamaño de cada asset publicado con el del disco y prueba la URL fija: que el release exista no
+garantiza que se pueda descargar.
+
+`-Publicar` no se puede combinar con `-SoloEmpaquetar`: un paquete sin verificar no se publica.
+
+Para sacar una versión nueva: subir la versión en los dos archivos, commitear, pushear y recién
+ahí correr el script con `-Publicar`.
+
 ---
 
 ## 6. Problemas conocidos
