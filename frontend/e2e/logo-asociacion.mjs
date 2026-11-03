@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /**
- * End-to-end smoke test for the "Asociación astronómica" screen and the logo.
+ * End-to-end smoke test for the "Asociación astronómica" screen, the logo and
+ * the observatories (create, edit, set default, active site and screen color).
  *
  * Drives a REAL browser (Chrome or Edge) over the Chrome DevTools Protocol, so it
  * catches things that unit tests and `npm run build` cannot: module resolution
@@ -19,8 +20,9 @@
  *   npm run e2e -- --read-only  only reads (touches no data)
  *   npm run e2e -- --headed     show the browser window while it works
  *
- * The full run temporarily changes the association name and logo, then ALWAYS
- * restores the original values (also when an assertion fails).
+ * The full run temporarily changes the association name and logo, creates an
+ * observatory, and then ALWAYS restores the original values (also when an
+ * assertion fails).
  *
  * Run it after touching anything that affects module loading. A stale Vite dev
  * server can serve old modules and blank the whole app while the terminal stays
@@ -45,9 +47,21 @@ const READ_ONLY = args.includes('--read-only');
 const HEADED = args.includes('--headed');
 
 const NEW_NAME = 'Asociación Astronómica Riguel';
+const OBS_NOMBRE = 'Observatorio E2E';
+const OBS_NOMBRE_EDITADO = 'Observatorio E2E Norte';
+const OBS_COLOR = '#0f766e';
+const OBS_LAT = -31.9;
+const OBS_LON = -70.5;
+const OBS_ALT = 1200;
 const ROUTES = ['/', '/observaciones', '/observaciones/new', '/admin/filtros', '/admin/asociacion'];
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+// rgb triplet of a #rrggbb color, to compare against computed styles
+function hexRgb(hex) {
+  const n = Number.parseInt(hex.replace('#', ''), 16);
+  return `${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}`;
+}
 
 // ---------------------------------------------------------------------------
 // tiny reporting helpers
@@ -153,6 +167,26 @@ const api = {
     }).then(r => r.json()),
   deleteLogo: () =>
     fetch(`${BASE}/api/v1/asociacion/logo`, { method: 'DELETE' }).then(r => r.json()),
+  observatorios: () => fetchJson(`${BASE}/api/v1/observatorios`),
+  crearObservatorio: body =>
+    fetch(`${BASE}/api/v1/observatorios`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }).then(async r => {
+      if (!r.ok) throw new Error(`crear observatorio respondio ${r.status}: ${await r.text()}`);
+      return r.json();
+    }),
+  predeterminado: id =>
+    fetch(`${BASE}/api/v1/observatorios/${id}/predeterminado`, { method: 'POST' }).then(async r => {
+      if (!r.ok) throw new Error(`marcar predeterminado respondio ${r.status}: ${await r.text()}`);
+      return r.json();
+    }),
+  borrarObservatorio: id =>
+    fetch(`${BASE}/api/v1/observatorios/${id}`, { method: 'DELETE' }).then(r => {
+      if (!r.ok) throw new Error(`borrar observatorio respondio ${r.status}`);
+      return null;
+    }),
 };
 
 // ---------------------------------------------------------------------------
@@ -161,6 +195,8 @@ const api = {
 let browser;
 let profileDir;
 let original = null;
+let originalObservatorio = null;
+let createdObservatorioId = null;
 
 async function main() {
   console.log('E2E: pantalla de asociación + logo (navegador real)');
@@ -184,7 +220,11 @@ async function main() {
   }
 
   original = await api.get();
+  const observatoriosIniciales = await api.observatorios();
+  originalObservatorio =
+    observatoriosIniciales.find(o => o.es_predeterminado) ?? observatoriosIniciales[0] ?? null;
   info(`estado inicial: nombre="${original.nombre}" logo=${original.logo_path ?? '(ninguno)'}`);
+  info(`observatorios: ${observatoriosIniciales.length}, activo="${originalObservatorio?.nombre ?? '(ninguno)'}"`);
 
   profileDir = path.join(os.tmpdir(), `orq-e2e-${Date.now()}`);
   browser = spawn(executable, [
@@ -414,8 +454,230 @@ async function main() {
     check('el nombre se mantiene al quitar el logo', removed.sidebarNombre === NEW_NAME, `sidebar dice "${removed.sidebarNombre}"`);
   }
 
-  // -- 4. navegación SPA ----------------------------------------------------
-  section('4. Navegación SPA');
+  // -- 4. observatorios: alta, edición, predeterminado, selector y color ----
+  if (READ_ONLY) {
+    section('4. Observatorios');
+    console.log('  SKIP  --read-only');
+  } else if (!originalObservatorio) {
+    section('4. Observatorios');
+    check('hay al menos un observatorio para probar', false, 'la app no devolvió ninguno');
+  } else {
+    section('4. Observatorios: alta, edición y selector');
+
+    // 4a. alta desde la UI
+    await goto('/admin/asociacion');
+    await evaluate(`(() => {
+      Array.from(document.querySelectorAll('button')).find(b => b.innerText.trim() === '+ Agregar observatorio').click();
+      return true;
+    })()`);
+    await waitUntil(
+      `!!Array.from(document.querySelectorAll('h3')).find(h => h.innerText.includes('Nuevo observatorio'))`,
+      'que se abra el formulario de observatorio',
+    );
+
+    await evaluate(`(() => {
+      const field = labelText => {
+        const label = Array.from(document.querySelectorAll('label')).find(l => l.innerText.trim() === labelText);
+        return label ? document.getElementById(label.htmlFor) : null;
+      };
+      const setValue = (labelText, value) => {
+        const el = field(labelText);
+        if (!el) throw new Error('no encontré el campo ' + labelText);
+        const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+        setter.call(el, value);
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+      };
+      setValue('Nombre', ${JSON.stringify(OBS_NOMBRE)});
+      setValue('Latitud', ${JSON.stringify(String(OBS_LAT))});
+      setValue('Longitud', ${JSON.stringify(String(OBS_LON))});
+      setValue('Altitud (m s. n. m.)', ${JSON.stringify(String(OBS_ALT))});
+      const swatch = document.querySelector('button[title="Usar ${OBS_COLOR}"]');
+      if (!swatch) throw new Error('no encontré el color ${OBS_COLOR} en la paleta');
+      swatch.click();
+      return true;
+    })()`);
+    await sleep(150);
+    await evaluate(`(() => {
+      Array.from(document.querySelectorAll('button')).find(b => b.innerText.trim() === 'Guardar observatorio').click();
+      return true;
+    })()`);
+    await waitUntil(
+      `!Array.from(document.querySelectorAll('h3')).some(h => h.innerText.includes('Nuevo observatorio'))`,
+      'que se cierre el formulario tras guardar',
+    );
+
+    let listaObservatorios = await api.observatorios();
+    const creado = listaObservatorios.find(o => o.nombre === OBS_NOMBRE);
+    if (creado) createdObservatorioId = creado.id;
+
+    check('el observatorio nuevo queda guardado', !!creado, `la API no trae "${OBS_NOMBRE}"`);
+    if (creado) {
+      check('guarda latitud y longitud', creado.latitud === OBS_LAT && creado.longitud === OBS_LON, `lat=${creado.latitud} lon=${creado.longitud}`);
+      check('guarda la altitud', creado.altitud_msnm === OBS_ALT, `alt=${creado.altitud_msnm}`);
+      check('usa el color elegido', creado.color === OBS_COLOR, `color=${creado.color}`);
+      check('el primero sigue siendo el predeterminado', creado.es_predeterminado === false, 'el nuevo quedó predeterminado');
+    }
+
+    const filaCreada = await evaluate(`(() => {
+      const li = Array.from(document.querySelectorAll('li')).find(li => li.innerText.includes(${JSON.stringify(OBS_NOMBRE)}));
+      return li ? li.innerText : null;
+    })()`);
+    check('la lista muestra el observatorio', !!filaCreada, `no encontré "${OBS_NOMBRE}" en la lista`);
+    check(
+      'la lista muestra coordenadas y altitud',
+      !!filaCreada && filaCreada.includes('-31.9000°, -70.5000°') && filaCreada.includes(`${OBS_ALT} m s. n. m.`),
+      `fila="${filaCreada?.replace(/\\n/g, ' | ')}"`,
+    );
+
+    // 4b. edición desde la UI
+    await evaluate(`(() => {
+      const li = Array.from(document.querySelectorAll('li')).find(li => li.innerText.includes(${JSON.stringify(OBS_NOMBRE)}));
+      Array.from(li.querySelectorAll('button')).find(b => b.innerText.trim() === 'Editar').click();
+      return true;
+    })()`);
+    await waitUntil(
+      `!!Array.from(document.querySelectorAll('h3')).find(h => h.innerText.includes('Editar observatorio'))`,
+      'que se abra el formulario de edición',
+    );
+    await evaluate(`(() => {
+      const label = Array.from(document.querySelectorAll('label')).find(l => l.innerText.trim() === 'Nombre');
+      const el = document.getElementById(label.htmlFor);
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+      setter.call(el, ${JSON.stringify(OBS_NOMBRE_EDITADO)});
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+      return true;
+    })()`);
+    await sleep(150);
+    await evaluate(`(() => {
+      Array.from(document.querySelectorAll('button')).find(b => b.innerText.trim() === 'Guardar observatorio').click();
+      return true;
+    })()`);
+    await waitUntil(
+      `!Array.from(document.querySelectorAll('h3')).some(h => h.innerText.includes('Editar observatorio'))`,
+      'que se cierre el formulario tras editar',
+    );
+
+    listaObservatorios = await api.observatorios();
+    check(
+      'la edición se guarda',
+      listaObservatorios.some(o => o.id === createdObservatorioId && o.nombre === OBS_NOMBRE_EDITADO),
+      `la API no trae "${OBS_NOMBRE_EDITADO}"`,
+    );
+    check(
+      'la lista muestra el nombre editado',
+      await evaluate(`document.body.innerText.includes(${JSON.stringify(OBS_NOMBRE_EDITADO)})`),
+    );
+
+    // 4c. marcarlo como predeterminado desde la UI
+    await evaluate(`(() => {
+      const li = Array.from(document.querySelectorAll('li')).find(li => li.innerText.includes(${JSON.stringify(OBS_NOMBRE_EDITADO)}));
+      Array.from(li.querySelectorAll('button')).find(b => b.innerText.trim() === 'Hacer predeterminado').click();
+      return true;
+    })()`);
+    await waitUntil(
+      `fetch('/api/v1/observatorios').then(r => r.json()).then(l => l.find(o => o.es_predeterminado)?.id === ${createdObservatorioId})`,
+      'que el observatorio nuevo quede predeterminado',
+    );
+    await waitUntil(
+      `(() => {
+        const li = Array.from(document.querySelectorAll('li')).find(li => li.innerText.includes(${JSON.stringify(OBS_NOMBRE_EDITADO)}));
+        return !!li && li.innerText.includes('Predeterminado');
+      })()`,
+      'que la fila marque el predeterminado',
+    );
+    const filaPredeterminada = await evaluate(`(() => {
+      const li = Array.from(document.querySelectorAll('li')).find(li => li.innerText.includes(${JSON.stringify(OBS_NOMBRE_EDITADO)}));
+      return li ? li.innerText : null;
+    })()`);
+    check('la fila marca el predeterminado', !!filaPredeterminada && filaPredeterminada.includes('Predeterminado'), `fila="${filaPredeterminada?.replace(/\\n/g, ' | ')}"`);
+
+    // 4d. el dashboard lista los observatorios y titula con la asociación
+    await goto('/');
+    await waitUntil(
+      `document.body.innerText.includes(${JSON.stringify(OBS_NOMBRE_EDITADO)})`,
+      'que el dashboard liste el observatorio',
+    );
+    const dashboard = await evaluate(`(() => {
+      const li = Array.from(document.querySelectorAll('li')).find(li => li.innerText.includes(${JSON.stringify(OBS_NOMBRE_EDITADO)}));
+      return {
+        titulo: document.querySelector('main h1')?.innerText.trim() ?? null,
+        fila: li ? li.innerText : null,
+      };
+    })()`);
+    check('el dashboard titula con la asociación', dashboard.titulo === NEW_NAME, `título="${dashboard.titulo}"`);
+    check(
+      'el dashboard lista coordenadas y altitud',
+      !!dashboard.fila && dashboard.fila.includes('-31.9000°, -70.5000°') && dashboard.fila.includes(`${OBS_ALT} m s. n. m.`),
+      `fila="${dashboard.fila?.replace(/\\n/g, ' | ')}"`,
+    );
+
+    // 4e. el selector de observaciones arranca en el predeterminado y tiñe la pantalla.
+    // Se borra la elección guardada y se recarga para simular la primera visita:
+    // con una elección previa el selector respeta esa elección, no el predeterminado.
+    await evaluate(`localStorage.removeItem('observatorio-activo-id')`);
+    await goto('/observaciones');
+    await waitUntil(
+      `Array.from(document.querySelectorAll('select option')).some(o => o.textContent.includes(${JSON.stringify(OBS_NOMBRE_EDITADO)}))`,
+      'que el selector cargue los observatorios',
+    );
+    await waitUntil(
+      `getComputedStyle(document.querySelector('main')).backgroundColor.includes('rgba(${hexRgb(OBS_COLOR)}')`,
+      'que la pantalla tome el color del observatorio predeterminado',
+    );
+
+    const selectorInicial = await evaluate(`(() => {
+      const sel = Array.from(document.querySelectorAll('select')).find(s => Array.from(s.options).some(o => o.textContent.includes(${JSON.stringify(OBS_NOMBRE_EDITADO)})));
+      return {
+        value: sel?.value ?? null,
+        opcion: sel?.selectedOptions[0]?.textContent ?? null,
+        fondo: getComputedStyle(document.querySelector('main')).backgroundColor,
+        sidebar: document.querySelector('aside')?.innerText ?? '',
+      };
+    })()`);
+
+    check('el selector arranca en el predeterminado', selectorInicial.value === String(createdObservatorioId), `value="${selectorInicial.value}"`);
+    check('la opción marca cuál es el predeterminado', selectorInicial.opcion === `${OBS_NOMBRE_EDITADO} (predeterminado)`, `opción="${selectorInicial.opcion}"`);
+    check(
+      'la pantalla toma el color del observatorio',
+      selectorInicial.fondo.includes(`rgba(${hexRgb(OBS_COLOR)}`),
+      `fondo="${selectorInicial.fondo}"`,
+    );
+    check('el sidebar indica el observatorio activo', selectorInicial.sidebar.includes(OBS_NOMBRE_EDITADO));
+
+    // 4f. cambiar de observatorio cambia el color
+    await evaluate(`(() => {
+      const sel = Array.from(document.querySelectorAll('select')).find(s => Array.from(s.options).some(o => o.textContent.includes(${JSON.stringify(OBS_NOMBRE_EDITADO)})));
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, 'value').set;
+      setter.call(sel, ${JSON.stringify(String(originalObservatorio.id))});
+      sel.dispatchEvent(new Event('change', { bubbles: true }));
+      return true;
+    })()`);
+    await waitUntil(
+      `localStorage.getItem('observatorio-activo-id') === ${JSON.stringify(String(originalObservatorio.id))}`,
+      'que se guarde el observatorio elegido',
+    );
+    await sleep(500);
+
+    const selectorCambiado = await evaluate(`(() => {
+      const sel = Array.from(document.querySelectorAll('select')).find(s => Array.from(s.options).some(o => o.textContent.includes(${JSON.stringify(OBS_NOMBRE_EDITADO)})));
+      return {
+        value: sel?.value ?? null,
+        fondo: getComputedStyle(document.querySelector('main')).backgroundColor,
+        sidebar: document.querySelector('aside')?.innerText ?? '',
+      };
+    })()`);
+
+    check('el selector queda en el observatorio elegido', selectorCambiado.value === String(originalObservatorio.id), `value="${selectorCambiado.value}"`);
+    check(
+      'el color de la pantalla cambia con el observatorio',
+      selectorCambiado.fondo.includes(`rgba(${hexRgb(originalObservatorio.color)}`),
+      `fondo="${selectorCambiado.fondo}"`,
+    );
+    check('el sidebar muestra el observatorio elegido', selectorCambiado.sidebar.includes(originalObservatorio.nombre));
+  }
+
+  // -- 5. navegación SPA ----------------------------------------------------
+  section('5. Navegación SPA');
   await goto('/admin/asociacion');
   await evaluate(`(() => {
     Array.from(document.querySelectorAll('aside a')).find(a => a.innerText.includes('Observaciones')).click();
@@ -431,7 +693,7 @@ async function main() {
   check('el sidebar persiste tras navegar', spa.hasSidebar && spa.navCount === 5, `navItems=${spa.navCount}`);
 
   // -- 5. consola limpia ----------------------------------------------------
-  section('5. Consola del navegador');
+  section('6. Consola del navegador');
   const realErrors = consoleErrors.filter(e => !e.includes('favicon.ico'));
   check('sin errores ni excepciones', realErrors.length === 0, realErrors.join(' | '));
   for (const e of realErrors.slice(0, 10)) info(e);
@@ -443,8 +705,29 @@ async function main() {
 // cleanup: always put the app back the way we found it
 // ---------------------------------------------------------------------------
 async function restore() {
-  if (!original) return;
+  if (!original || READ_ONLY) return;
   section('Restaurando el estado original');
+
+  // The test observatory may exist even when an assertion failed before its id
+  // was recorded, so it is looked up by name too.
+  try {
+    const lista = await api.observatorios();
+    const creado =
+      lista.find(o => o.id === createdObservatorioId) ??
+      lista.find(o => o.nombre === OBS_NOMBRE || o.nombre === OBS_NOMBRE_EDITADO);
+    if (creado) {
+      createdObservatorioId = creado.id;
+      if (originalObservatorio) {
+        await api.predeterminado(originalObservatorio.id);
+      }
+      await api.borrarObservatorio(creado.id);
+      info(`observatorio de prueba eliminado (id ${creado.id})`);
+    }
+  } catch (err) {
+    console.log(`  WARN  no pude limpiar los observatorios: ${err.message}`);
+    console.log(`        borralo a mano -> "${OBS_NOMBRE_EDITADO}"`);
+  }
+
   try {
     const current = await api.get();
     if (current.logo_path !== original.logo_path) {

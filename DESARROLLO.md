@@ -165,7 +165,8 @@ npm run e2e -- --headed          # con la ventana del navegador a la vista
 Apunta a otra URL con la variable `E2E_BASE_URL` (por ejemplo `http://localhost:5173` para el modo
 desarrollo). Abre un navegador headless, recorre las 5 pantallas comprobando que el logo y el nombre
 carguen de verdad, hace el click-through completo de `/admin/asociacion` (guardar nombre, subir logo,
-quitar logo) y **restaura el estado original** al terminar.
+quitar logo, alta/edición de un observatorio y marcarlo como predeterminado), verifica el selector y
+el cambio de color en `/observaciones`, y **restaura el estado original** al terminar.
 
 Es la única verificación que atrapa fallas de carga de módulos, que `npm test` y `npm run build` no
 pueden ver. No necesita dependencias: usa los módulos nativos de Node (requiere Node 22 o superior) y
